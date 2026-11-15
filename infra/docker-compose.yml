@@ -1,0 +1,100 @@
+# M1 stack: web, api, postgres, redis, mailpit (docs/MILESTONES.md M1).
+# llm / stt / tts / jobs / caddy arrive with later milestones (ARCHITECTURE.md §10).
+# All images are multi-arch (arm64 + amd64).
+name: bruno
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bruno}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bruno_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-bruno}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bruno} -d ${POSTGRES_DB:-bruno}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # local mail catcher for verification / reset / alert emails (docs/CLAUDE.md §3)
+  mailpit:
+    image: axllent/mailpit:v1.21
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # web UI
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      # `make dev` creates .env from .env.example; not required just to parse this file
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-bruno}:${POSTGRES_PASSWORD:-bruno_dev_password}@postgres:5432/${POSTGRES_DB:-bruno}
+      REDIS_URL: redis://redis:6379/0
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./services/api:/srv/api
+    command:
+      ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # server-side rewrite target, so browser cookies stay first-party (one origin)
+      API_INTERNAL_URL: http://api:8000
+      NODE_ENV: development
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/web:/srv/web
+      - web_node_modules:/srv/web/node_modules
+      - web_next:/srv/web/.next
+    command: ["pnpm", "dev"]
+
+volumes:
+  pgdata:
+  web_node_modules:
+  web_next:

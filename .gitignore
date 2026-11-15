@@ -1,0 +1,42 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# node
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# model weights are never committed (docs/CLAUDE.md §3)
+models/weights/
+*.gguf
+*.bin
+*.onnx
+
+# audio is never stored (docs/CLAUDE.md §2)
+*.wav
+*.mp3
+*.ogg
+!apps/web/public/characters/**/*.wav
+
+# os / editors
+.DS_Store
+.idea/
+.vscode/

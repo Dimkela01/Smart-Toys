@@ -1,0 +1,100 @@
+# Model registry (F-20, ARCHITECTURE.md §8, docs/CLAUDE.md §3).
+#
+# This file is the ONLY place a model is named. No model id, file name or endpoint is
+# hard-coded anywhere in the application code. The final choice comes from the benchmark
+# in docs/EVALUATION.md; `default` below is only the starting point for M2.
+#
+# Weights are never committed. `make models` downloads them into models/weights/ and
+# verifies sha256 (scripts/download_models.py). The sha256 values below must be filled in
+# when the weights are first downloaded (M2); `null` means "not yet verified".
+version: 1
+default: qwen3-1.7b
+
+models:
+  - id: qwen3-1.7b
+    family: qwen3
+    file: Qwen3-1.7B-Q4_K_M.gguf
+    quant: Q4_K_M
+    size_mb: 1120
+    context: 2048
+    runtime: llama.cpp
+    license: apache-2.0
+    source:
+      repo: Qwen/Qwen3-1.7B-GGUF
+      path: Qwen3-1.7B-Q4_K_M.gguf
+      sha256: null
+    options:
+      # Qwen3 thinking must stay off; <think> is stripped defensively (ARCHITECTURE.md §6.3)
+      enable_thinking: false
+    endpoints:
+      server: ${LLM_SERVER_URL}/v1
+      device: ${DEVICE_TUNNEL_URL}/v1
+    active_envs: [demo, pilot, eval]
+
+  - id: gemma3-1b
+    family: gemma3
+    file: gemma-3-1b-it-Q4_K_M.gguf
+    quant: Q4_K_M
+    size_mb: 806
+    context: 2048
+    runtime: llama.cpp
+    license: gemma-terms-of-use
+    source:
+      repo: google/gemma-3-1b-it-qat-q4_0-gguf
+      path: gemma-3-1b-it-q4_0.gguf
+      sha256: null
+    options: {}
+    endpoints:
+      server: ${LLM_SERVER_URL}/v1
+      device: ${DEVICE_TUNNEL_URL}/v1
+    active_envs: [eval]
+
+  - id: qwen3-0.6b
+    family: qwen3
+    file: Qwen3-0.6B-Q4_K_M.gguf
+    quant: Q4_K_M
+    size_mb: 484
+    context: 2048
+    runtime: llama.cpp
+    license: apache-2.0
+    source:
+      repo: Qwen/Qwen3-0.6B-GGUF
+      path: Qwen3-0.6B-Q4_K_M.gguf
+      sha256: null
+    options:
+      enable_thinking: false
+    endpoints:
+      server: ${LLM_SERVER_URL}/v1
+      device: ${DEVICE_TUNNEL_URL}/v1
+    active_envs: [eval]
+
+# Speech models (used from M2; listed here so `make models` fetches everything at once).
+stt:
+  - id: faster-whisper-base-int8
+    runtime: faster-whisper
+    size: base
+    compute_type: int8
+    license: mit
+    source:
+      repo: Systran/faster-whisper-base
+      sha256: null
+
+tts:
+  - id: kokoro-82m
+    runtime: kokoro
+    language: en
+    license: apache-2.0
+    internal_only: false
+    source:
+      repo: hexgrad/Kokoro-82M
+      sha256: null
+  - id: piper-sr-placeholder
+    runtime: piper
+    language: sr
+    # license not confirmed — internal demos only, never a public demo URL (docs/CLAUDE.md §3)
+    license: unconfirmed
+    internal_only: true
+    source:
+      repo: rhasspy/piper-voices
+      path: sr/sr_RS/placeholder/medium
+      sha256: null
