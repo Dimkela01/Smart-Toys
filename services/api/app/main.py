@@ -16,8 +16,12 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.db import engine
+from app.redis_client import close_redis
+from app.routers import auth
 
 logger = logging.getLogger("app")
+
+API_PREFIX = "/api/v1"
 
 
 @asynccontextmanager
@@ -26,6 +30,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     for problem in settings.check_production_safety():
         logger.warning("unsafe configuration for a pilot: %s", problem)
     yield
+    await close_redis()
     await engine.dispose()
 
 
@@ -38,6 +43,9 @@ app = FastAPI(
     openapi_url="/api/v1/openapi.json",
     docs_url="/docs",
 )
+
+
+app.include_router(auth.router, prefix=API_PREFIX)
 
 
 @app.get("/healthz", tags=["meta"])

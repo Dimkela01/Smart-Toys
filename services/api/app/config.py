@@ -36,12 +36,16 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://bruno:bruno_dev_password@localhost:5432/bruno"
     test_database_url: str | None = None
     redis_url: str = "redis://localhost:6379/0"
+    #: host-visible Redis for pytest (the app itself talks to the container hostname)
+    test_redis_url: str | None = None
 
     # --- auth ---
     jwt_secret: str = DEV_JWT_SECRET
     access_token_minutes: int = 15
     refresh_token_days: int = 30
     consent_version: str = "2026-11-11"
+    #: the refresh cookie needs Secure behind TLS; off for plain-http development
+    cookie_secure: bool = False
 
     # verification / reset link lifetimes (UC-01, UC-02)
     verify_token_hours: int = 24
@@ -101,6 +105,8 @@ class Settings(BaseSettings):
             problems.append("EMAIL_PRINT_LINKS must be off outside development")
         if self.smtp_host in {"localhost", "mailpit"}:
             problems.append("SMTP_HOST still points at the local mail catcher")
+        if not self.cookie_secure:
+            problems.append("COOKIE_SECURE must be on behind TLS (NFR-05)")
         return problems
 
 
