@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Bee">
+  <!-- PLACEHOLDER (docs/CLAUDE.md §3). Swap for real artwork; keep this file name. -->
+  <rect width="120" height="120" rx="24" fill="#F6C85F"/>
+  <path d="M60 30 L88 60 L60 90 L32 60 Z" fill="#fff" opacity="0.92"/>
+</svg>

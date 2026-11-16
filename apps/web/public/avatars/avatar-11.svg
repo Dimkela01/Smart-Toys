@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Tree">
+  <!-- PLACEHOLDER (docs/CLAUDE.md §3). Swap for real artwork; keep this file name. -->
+  <rect width="120" height="120" rx="24" fill="#2F8F6B"/>
+  <path d="M60 30 C74 50 82 60 82 70 a22 22 0 0 1 -44 0 C38 60 46 50 60 30 Z" fill="#fff" opacity="0.92"/>
+</svg>

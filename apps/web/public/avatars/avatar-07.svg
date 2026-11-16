@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Whale">
+  <!-- PLACEHOLDER (docs/CLAUDE.md §3). Swap for real artwork; keep this file name. -->
+  <rect width="120" height="120" rx="24" fill="#5C8AE6"/>
+  <path d="M60 86 C34 68 34 46 48 42 C56 40 60 46 60 50 C60 46 64 40 72 42 C86 46 86 68 60 86 Z" fill="#fff" opacity="0.92"/>
+</svg>

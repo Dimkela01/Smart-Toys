@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Giraffe">
+  <!-- PLACEHOLDER (docs/CLAUDE.md §3). Swap for real artwork; keep this file name. -->
+  <rect width="120" height="120" rx="24" fill="#7F9A3C"/>
+  <path d="M52 32 h16 v20 h20 v16 h-20 v20 h-16 v-20 h-20 v-16 h20 Z" fill="#fff" opacity="0.92"/>
+</svg>

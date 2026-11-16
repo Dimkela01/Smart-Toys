@@ -77,7 +77,11 @@ class Settings(BaseSettings):
     tts_server_url: str = "http://tts:8002"
     device_tunnel_url: str = ""
     device_tunnel_token: str = ""
-    model_registry_path: str = "models/registry.yaml"
+    model_registry_path: str = str(REPO_ROOT / "models" / "registry.yaml")
+
+    # --- versioned content (characters, avatars, lessons; NFR-11) ---
+    #: mounted read-only into the api container, which does not see the repo root
+    content_dir: str = str(REPO_ROOT / "content")
 
     # --- retention (DATA_MODEL.md §6) ---
     transcript_retention_days: int = 30

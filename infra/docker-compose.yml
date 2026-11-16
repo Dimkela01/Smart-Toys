@@ -58,6 +58,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
+      # the container does not see the repo root, so the shared files are mounted
+      CONTENT_DIR: /srv/content
+      MODEL_REGISTRY_PATH: /srv/models/registry.yaml
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,6 +70,8 @@ services:
       - "${API_PORT:-8000}:8000"
     volumes:
       - ./services/api:/srv/api
+      - ./content:/srv/content:ro
+      - ./models:/srv/models:ro
     command:
       ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     healthcheck:

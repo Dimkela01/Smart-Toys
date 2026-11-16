@@ -1,0 +1,25 @@
+{
+  "status": "draft",
+  "version": 1,
+  "note": [
+    "DRAFT placeholder avatars (docs/CLAUDE.md §3: simple coloured animals or shapes).",
+    "The ids and file names are final, so the artwork can be swapped without touching",
+    "the database. A child picks their picture to sign in (D4), and two children in the",
+    "same family cannot share one (UC-03 AC).",
+    "Labels exist for screen readers and the parent UI only; the picker needs no reading."
+  ],
+  "avatars": [
+    { "id": "avatar-01", "asset": "avatars/avatar-01.svg", "color": "#E8743B", "label": { "sr": "Lisica", "en": "Fox" } },
+    { "id": "avatar-02", "asset": "avatars/avatar-02.svg", "color": "#19A979", "label": { "sr": "Žaba", "en": "Frog" } },
+    { "id": "avatar-03", "asset": "avatars/avatar-03.svg", "color": "#945ECF", "label": { "sr": "Sova", "en": "Owl" } },
+    { "id": "avatar-04", "asset": "avatars/avatar-04.svg", "color": "#13A4B4", "label": { "sr": "Riba", "en": "Fish" } },
+    { "id": "avatar-05", "asset": "avatars/avatar-05.svg", "color": "#F6C85F", "label": { "sr": "Pčela", "en": "Bee" } },
+    { "id": "avatar-06", "asset": "avatars/avatar-06.svg", "color": "#EE4D5F", "label": { "sr": "Bubamara", "en": "Ladybird" } },
+    { "id": "avatar-07", "asset": "avatars/avatar-07.svg", "color": "#5C8AE6", "label": { "sr": "Kit", "en": "Whale" } },
+    { "id": "avatar-08", "asset": "avatars/avatar-08.svg", "color": "#7F9A3C", "label": { "sr": "Žirafa", "en": "Giraffe" } },
+    { "id": "avatar-09", "asset": "avatars/avatar-09.svg", "color": "#C96A9B", "label": { "sr": "Prase", "en": "Piglet" } },
+    { "id": "avatar-10", "asset": "avatars/avatar-10.svg", "color": "#6B4E9B", "label": { "sr": "Zvezda", "en": "Star" } },
+    { "id": "avatar-11", "asset": "avatars/avatar-11.svg", "color": "#2F8F6B", "label": { "sr": "Drvo", "en": "Tree" } },
+    { "id": "avatar-12", "asset": "avatars/avatar-12.svg", "color": "#D9822B", "label": { "sr": "Sunce", "en": "Sun" } }
+  ]
+}

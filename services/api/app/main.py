@@ -17,7 +17,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.db import engine
 from app.redis_client import close_redis
-from app.routers import auth
+from app.routers import auth, children, meta
 
 logger = logging.getLogger("app")
 
@@ -47,6 +47,8 @@ app = FastAPI(
 
 app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(auth.pin_router, prefix=API_PREFIX)
+app.include_router(children.router, prefix=API_PREFIX)
+app.include_router(meta.router, prefix=API_PREFIX)
 
 
 @app.get("/healthz", tags=["meta"])

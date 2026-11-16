@@ -110,6 +110,48 @@ def sent_emails(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, str]]:
     return captured
 
 
+DEFAULT_PASSWORD = "dovoljno-duga-sifra"
+DEFAULT_PIN = "4821"
+
+
+async def create_parent(
+    client: AsyncClient,
+    sent_emails: list[dict[str, str]],
+    *,
+    email: str,
+    password: str = DEFAULT_PASSWORD,
+    pin: str | None = DEFAULT_PIN,
+    locale: str = "sr",
+) -> dict[str, str]:
+    """Register, verify and (unless pin is None) set the PIN. Returns auth headers."""
+    registered = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": password,
+            "adult_confirmed": True,
+            "consent_accepted": True,
+            "locale": locale,
+        },
+    )
+    assert registered.status_code == 202, registered.text
+
+    verified = await client.post("/api/v1/auth/verify", json={"token": token_from_email(sent_emails[-1])})
+    assert verified.status_code == 200, verified.text
+    headers = {"Authorization": f"Bearer {verified.json()['access_token']}"}
+
+    if pin is not None:
+        pinned = await client.post("/api/v1/auth/pin", json={"pin": pin, "pin_repeat": pin}, headers=headers)
+        assert pinned.status_code == 200, pinned.text
+    return headers
+
+
+@pytest.fixture
+async def parent_headers(client: AsyncClient, sent_emails: list[dict[str, str]]) -> dict[str, str]:
+    """A parent who has finished setup: verified address and a PIN."""
+    return await create_parent(client, sent_emails, email="parent-one@example.com")
+
+
 def token_from_email(message: dict[str, str]) -> str:
     """Pull the one-shot token out of a verification or reset link."""
     match = re.search(r"token=([A-Za-z0-9._\-]+)", message["body"])
