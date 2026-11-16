@@ -87,6 +87,7 @@ export default function ToyScreen(): ReactNode {
   const [pinError, setPinError] = useState<string | undefined>();
   const [pinBusy, setPinBusy] = useState(false);
   const holdTimer = useRef<number | null>(null);
+  const celebrationTimer = useRef<number | null>(null);
 
   useLockedScreen();
 
@@ -101,6 +102,23 @@ export default function ToyScreen(): ReactNode {
     router.replace('/child');
   }, [router]);
 
+  const stopCelebrating = useCallback(() => {
+    if (celebrationTimer.current !== null) {
+      window.clearTimeout(celebrationTimer.current);
+      celebrationTimer.current = null;
+    }
+  }, []);
+
+  /** Tapping an activity card is acknowledged, then Bruno settles back down. */
+  const celebrate = useCallback(() => {
+    stopCelebrating();
+    setState('happy');
+    celebrationTimer.current = window.setTimeout(() => {
+      celebrationTimer.current = null;
+      setState('idle');
+    }, 1200);
+  }, [stopCelebrating]);
+
   useEffect(() => {
     const stored = storedChild();
     if (!stored || !childSessionToken()) {
@@ -110,8 +128,11 @@ export default function ToyScreen(): ReactNode {
     setChild(stored);
     // Bruno wakes up when the child arrives (UC-05 step 4)
     const wake = window.setTimeout(() => setState('idle'), 400);
-    return () => window.clearTimeout(wake);
-  }, [leave]);
+    return () => {
+      window.clearTimeout(wake);
+      stopCelebrating();
+    };
+  }, [leave, stopCelebrating]);
 
   function startExitHold(): void {
     if (holdTimer.current !== null) return;
@@ -189,7 +210,7 @@ export default function ToyScreen(): ReactNode {
               aria-label={t(
                 `child.activity${activity.charAt(0).toUpperCase()}${activity.slice(1)}`,
               )}
-              onClick={() => setState('happy')}
+              onClick={celebrate}
               className="grid h-16 w-16 place-items-center rounded-2xl bg-white/80"
             >
               {ACTIVITY_ICONS[activity] ?? null}
@@ -200,7 +221,11 @@ export default function ToyScreen(): ReactNode {
         <div className="pt-4 pb-2">
           <PawButton
             label={t('child.pawLabel')}
-            onPressStart={() => setState('listening')}
+            // the paw wins over a celebration still in progress
+            onPressStart={() => {
+              stopCelebrating();
+              setState('listening');
+            }}
             onPressEnd={() => setState('idle')}
           />
         </div>

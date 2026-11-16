@@ -143,6 +143,12 @@ test.describe('M1 run-through', () => {
       await expect(page.locator('.character--listening')).toBeVisible();
       await page.mouse.up();
       await expect(page.locator('.character--idle')).toBeVisible();
+
+      // tapping a card is acknowledged, then Bruno settles back down rather than
+      // celebrating for ever
+      await page.getByRole('button', { name: 'Brojevi' }).click();
+      await expect(page.locator('.character--happy')).toBeVisible();
+      await expect(page.locator('.character--idle')).toBeVisible({ timeout: 5000 });
     });
 
     await test.step('child mode is locked: back does not leave it', async () => {
