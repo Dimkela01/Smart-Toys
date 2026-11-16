@@ -13,6 +13,8 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     "email-validator>=2.2.0",
     "argon2-cffi>=23.1.0",
+    # encrypts the admin TOTP secret at rest (admins.totp_secret_enc)
+    "cryptography>=44.0.0",
     "pyjwt>=2.9.0",
     "pyotp>=2.9.0",
     "redis>=5.2.0",

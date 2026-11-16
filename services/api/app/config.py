@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     consent_version: str = "2026-11-11"
     #: the refresh cookie needs Secure behind TLS; off for plain-http development
     cookie_secure: bool = False
+    #: Fernet key for admins.totp_secret_enc; derived from JWT_SECRET when empty (dev only)
+    totp_encryption_key: str = ""
 
     # verification / reset link lifetimes (UC-01, UC-02)
     verify_token_hours: int = 24
@@ -71,7 +73,7 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_starttls: bool = False
-    smtp_from: str = "bruno@localhost"
+    smtp_from: str = "bruno@example.com"
     email_print_links: bool = True
 
     # --- inference (wired up in M2; no model id is hard-coded, F-20) ---
@@ -91,7 +93,8 @@ class Settings(BaseSettings):
     transcript_retention_days: int = 30
 
     # --- first admin (make seed) ---
-    admin_seed_email: str = "admin@localhost"
+    #: must be a full address with a TLD: the login schema validates it as an email
+    admin_seed_email: str = "admin@example.com"
     admin_seed_password: str = Field(default="admin_dev_password", repr=False)
 
     @field_validator("jwt_secret")
@@ -118,6 +121,8 @@ class Settings(BaseSettings):
             problems.append("SMTP_HOST still points at the local mail catcher")
         if not self.cookie_secure:
             problems.append("COOKIE_SECURE must be on behind TLS (NFR-05)")
+        if not self.totp_encryption_key:
+            problems.append("TOTP_ENCRYPTION_KEY must be set; otherwise rotating JWT_SECRET locks out admins")
         return problems
 
 

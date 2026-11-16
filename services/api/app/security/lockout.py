@@ -28,6 +28,8 @@ class LockoutPolicy:
 
 LOGIN = LockoutPolicy("login", settings.login_max_attempts, settings.login_lock_minutes * 60)
 PIN = LockoutPolicy("pin", settings.pin_max_attempts, settings.pin_lock_minutes * 60)
+#: team accounts, same thresholds as a parent login
+ADMIN_LOGIN = LockoutPolicy("admin_login", settings.login_max_attempts, settings.login_lock_minutes * 60)
 
 
 def _identity(value: str) -> str:

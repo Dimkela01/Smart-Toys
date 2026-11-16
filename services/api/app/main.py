@@ -17,7 +17,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.db import engine
 from app.redis_client import close_redis
-from app.routers import auth, child_mode, children, meta
+from app.routers import admin, auth, child_mode, children, meta
 
 logger = logging.getLogger("app")
 
@@ -50,6 +50,7 @@ app.include_router(auth.pin_router, prefix=API_PREFIX)
 app.include_router(children.router, prefix=API_PREFIX)
 app.include_router(child_mode.router, prefix=API_PREFIX)
 app.include_router(meta.router, prefix=API_PREFIX)
+app.include_router(admin.router, prefix=API_PREFIX)
 
 
 @app.get("/healthz", tags=["meta"])

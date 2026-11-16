@@ -16,8 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.errors import api_error
-from app.models import Parent
+from app.models import Admin, Parent
 from app.security import tokens
+from app.services import admin as admin_service
 from app.services import auth as auth_service
 
 _bearer = HTTPBearer(auto_error=False, description="Parent access token")
@@ -86,6 +87,25 @@ async def require_verified_parent(
     return principal
 
 
+async def get_admin_principal(
+    session: SessionDep,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)] = None,
+) -> Admin:
+    """Admin routes accept only an admin token; parent and child tokens get 403."""
+    if credentials is None:
+        raise api_error(401, "not_authenticated", "Sign in to continue.")
+    try:
+        payload = tokens.decode_token(credentials.credentials, expected=tokens.ADMIN)
+    except tokens.TokenError as error:
+        status = 403 if error.code == "wrong_token_type" else 401
+        raise api_error(status, error.code, "Sign in again to continue.") from error
+
+    admin = await admin_service.get_admin(session, tokens.subject_of(payload))
+    if admin is None:
+        raise api_error(401, "invalid_token", "Sign in again to continue.")
+    return admin
+
+
 @dataclass(frozen=True)
 class ChildPrincipal:
     """A device locked in child mode, optionally with a child already picked."""
@@ -143,5 +163,6 @@ async def get_child_session(
 ParentDep = Annotated[ParentPrincipal, Depends(get_parent_principal)]
 EmailVerifiedParentDep = Annotated[ParentPrincipal, Depends(require_email_verified_parent)]
 VerifiedParentDep = Annotated[ParentPrincipal, Depends(require_verified_parent)]
+AdminDep = Annotated[Admin, Depends(get_admin_principal)]
 ChildModeDep = Annotated[ChildPrincipal, Depends(get_child_principal)]
 ChildSessionDep = Annotated[ChildPrincipal, Depends(get_child_session)]
