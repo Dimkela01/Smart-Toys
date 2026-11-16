@@ -56,6 +56,8 @@ async function registerAndVerify(page: Page, address: string): Promise<void> {
 
 async function setPin(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Postavi PIN' }).click();
+  // the dev server may still be compiling /pin on a cold container
+  await page.waitForURL('**/pin');
   await page.getByLabel('PIN', { exact: true }).fill(PIN);
   await page.getByLabel('Ponovite PIN').fill(PIN);
   await page.getByRole('button', { name: 'Sačuvaj PIN' }).click();
@@ -206,7 +208,9 @@ test.describe('M1 run-through', () => {
   test('the admin page is reachable and refuses a password without a code', async ({ page }) => {
     await page.goto('/admin');
     await expect(page.getByRole('heading', { name: 'Administracija' })).toBeVisible();
-    await page.getByLabel('Email adresa').fill('admin@example.com');
+    // deliberately an address that does not exist: repeated failures against the real
+    // seeded admin would lock that account for 15 minutes and break the next run
+    await page.getByLabel('Email adresa').fill(uniqueEmail());
     await page.getByLabel('Šifra').fill('admin_dev_password');
     await page.getByLabel('Kod iz aplikacije').fill('000000');
     await page.getByRole('button', { name: 'Prijavi se' }).click();

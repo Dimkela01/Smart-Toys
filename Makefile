@@ -60,13 +60,14 @@ test-api: ## backend tests (pytest); applies migrations to an empty test databas
 
 test-e2e: .env ## Playwright end-to-end run-through (starts the stack with test limits)
 	@if [ ! -f apps/web/package.json ]; then echo "skip: apps/web not set up yet"; exit 0; fi; \
-	$(COMPOSE_TEST) up -d --wait postgres redis mailpit api web; \
-	$(COMPOSE_TEST) exec -T api alembic upgrade head; \
-	set -a; . ./.env; set +a; cd apps/web && pnpm exec playwright test
+	cd apps/web && pnpm install --prefer-offline --silent && pnpm exec playwright install chromium
+	$(COMPOSE_TEST) up -d --wait postgres redis mailpit api web
+	$(COMPOSE_TEST) exec -T api alembic upgrade head
+	@set -a; . ./.env; set +a; cd apps/web && pnpm exec playwright test
 
 lint: ## ruff + mypy + eslint + tsc
 	cd services/api && uv run ruff check . && uv run ruff format --check . && uv run mypy .
-	@if [ -f apps/web/package.json ]; then cd apps/web && pnpm run lint && pnpm exec tsc --noEmit; else echo "skip: apps/web not set up yet"; fi
+	@if [ -f apps/web/package.json ]; then cd apps/web && pnpm install --prefer-offline --silent && pnpm run lint && pnpm exec tsc --noEmit; else echo "skip: apps/web not set up yet"; fi
 
 fmt: ## format backend and frontend
 	cd services/api && uv run ruff format . && uv run ruff check --fix .
