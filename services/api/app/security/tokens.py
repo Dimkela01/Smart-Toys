@@ -66,14 +66,16 @@ def encode_token(
     return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITHM)
 
 
-def decode_token(token: str, *, expected: TokenType) -> dict[str, Any]:
+def decode_token(token: str, *, expected: TokenType | tuple[TokenType, ...]) -> dict[str, Any]:
     try:
         payload: dict[str, Any] = jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
     except jwt.ExpiredSignatureError as error:
         raise TokenError("token_expired") from error
     except jwt.InvalidTokenError as error:
         raise TokenError("invalid_token") from error
-    if payload.get("typ") != expected:
+
+    allowed = expected if isinstance(expected, tuple) else (expected,)
+    if payload.get("typ") not in allowed:
         # e.g. a child-session token presented to a parent endpoint
         raise TokenError("wrong_token_type")
     return payload
@@ -98,6 +100,36 @@ def access_token(
         expires_in=timedelta(minutes=settings.access_token_minutes),
         extra={"tv": token_version, "did": device_id},
     )
+
+
+# --- child mode (F-04, UC-05, UC-21) -----------------------------------------------------
+
+
+def child_mode_token(*, parent_id: uuid.UUID, device_id: str) -> str:
+    """Issued when the phone is handed over; may only reach /child-mode/*."""
+    return encode_token(
+        subject=parent_id,
+        token_type=CHILD_MODE,
+        expires_in=timedelta(minutes=settings.child_mode_token_minutes),
+        extra={"did": device_id},
+    )
+
+
+def child_session_token(*, parent_id: uuid.UUID, device_id: str, child_id: uuid.UUID) -> str:
+    """Issued once the child picks their picture; carries the child it is bound to."""
+    return encode_token(
+        subject=parent_id,
+        token_type=CHILD_SESSION,
+        expires_in=timedelta(hours=settings.child_session_token_hours),
+        extra={"did": device_id, "cid": str(child_id)},
+    )
+
+
+def child_of(payload: dict[str, Any]) -> uuid.UUID:
+    try:
+        return uuid.UUID(str(payload["cid"]))
+    except (KeyError, ValueError) as error:
+        raise TokenError("invalid_token") from error
 
 
 # --- one-shot email tokens ---------------------------------------------------------------

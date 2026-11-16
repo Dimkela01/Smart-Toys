@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     jwt_secret: str = DEV_JWT_SECRET
     access_token_minutes: int = 15
     refresh_token_days: int = 30
+    #: long enough for a child to pick their picture (F-04, UC-05)
+    child_mode_token_minutes: int = 15
+    #: one child session on the toy screen; daily limits and hours arrive in M5
+    child_session_token_hours: int = 6
     consent_version: str = "2026-11-11"
     #: the refresh cookie needs Secure behind TLS; off for plain-http development
     cookie_secure: bool = False

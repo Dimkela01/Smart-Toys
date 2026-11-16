@@ -138,6 +138,53 @@ async def revoke_all_tokens(session: AsyncSession, *, parent_id: uuid.UUID) -> N
     await session.flush()
 
 
+# --- child mode on a device (F-04, UC-05, UC-21) -----------------------------------------
+
+
+async def active_device_token(
+    session: AsyncSession, *, parent_id: uuid.UUID, device_id: str
+) -> RefreshToken | None:
+    result = await session.execute(
+        select(RefreshToken).where(
+            RefreshToken.user_id == parent_id,
+            RefreshToken.user_type == "parent",
+            RefreshToken.device_id == device_id,
+            RefreshToken.revoked_at.is_(None),
+        )
+    )
+    return result.scalars().first()
+
+
+async def enter_child_mode(session: AsyncSession, *, parent_id: uuid.UUID, device_id: str) -> bool:
+    """Lock the device. Returns False when it has no signed-in session to lock."""
+    row = await active_device_token(session, parent_id=parent_id, device_id=device_id)
+    if row is None:
+        return False
+    if row.child_mode_at is None:
+        row.child_mode_at = datetime.now(UTC)
+    await session.flush()
+    return True
+
+
+async def leave_child_mode(session: AsyncSession, *, parent_id: uuid.UUID, device_id: str) -> None:
+    await session.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == parent_id,
+            RefreshToken.device_id == device_id,
+            RefreshToken.revoked_at.is_(None),
+        )
+        .values(child_mode_at=None)
+    )
+    await session.flush()
+
+
+async def device_is_in_child_mode(session: AsyncSession, *, parent_id: uuid.UUID, device_id: str) -> bool:
+    """A child token is only good while its device is still locked (UC-21)."""
+    row = await active_device_token(session, parent_id=parent_id, device_id=device_id)
+    return row is not None and row.child_mode_at is not None
+
+
 async def rotate_refresh_token(
     session: AsyncSession, *, row: RefreshToken, parent: Parent
 ) -> tuple[str, str]:

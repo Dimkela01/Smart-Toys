@@ -6,6 +6,7 @@ child-mode or child-session token is rejected with 403 (ARCHITECTURE.md §9).
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -85,6 +86,62 @@ async def require_verified_parent(
     return principal
 
 
+@dataclass(frozen=True)
+class ChildPrincipal:
+    """A device locked in child mode, optionally with a child already picked."""
+
+    parent: Parent
+    device_id: str
+    child_id: uuid.UUID | None
+    token_type: str
+
+
+async def _child_principal(
+    session: AsyncSession,
+    credentials: HTTPAuthorizationCredentials | None,
+    *,
+    allowed: tuple[tokens.TokenType, ...],
+) -> ChildPrincipal:
+    if credentials is None:
+        raise api_error(401, "not_authenticated", "Child mode is not active on this device.")
+    try:
+        payload = tokens.decode_token(credentials.credentials, expected=allowed)
+    except tokens.TokenError as error:
+        status = 403 if error.code == "wrong_token_type" else 401
+        raise api_error(status, error.code, "Child mode is not active on this device.") from error
+
+    parent = await auth_service.get_parent(session, tokens.subject_of(payload))
+    if parent is None or not parent.is_verified or not parent.has_pin:
+        raise api_error(401, "invalid_token", "Child mode is not active on this device.")
+
+    device_id = str(payload.get("did", ""))
+    # exiting child mode (or logging out) clears the flag, which invalidates child tokens
+    if not await auth_service.device_is_in_child_mode(session, parent_id=parent.id, device_id=device_id):
+        raise api_error(403, "child_mode_inactive", "Child mode is not active on this device.")
+
+    token_type = str(payload.get("typ"))
+    child_id = tokens.child_of(payload) if token_type == tokens.CHILD_SESSION else None
+    return ChildPrincipal(parent=parent, device_id=device_id, child_id=child_id, token_type=token_type)
+
+
+async def get_child_principal(
+    session: SessionDep,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)] = None,
+) -> ChildPrincipal:
+    """Either stage of child mode: picking a picture, or playing (UC-05, UC-21)."""
+    return await _child_principal(session, credentials, allowed=(tokens.CHILD_MODE, tokens.CHILD_SESSION))
+
+
+async def get_child_session(
+    session: SessionDep,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)] = None,
+) -> ChildPrincipal:
+    """A child has been picked; used by /child-mode/select's result and by /ws/turns in M2."""
+    return await _child_principal(session, credentials, allowed=(tokens.CHILD_SESSION,))
+
+
 ParentDep = Annotated[ParentPrincipal, Depends(get_parent_principal)]
 EmailVerifiedParentDep = Annotated[ParentPrincipal, Depends(require_email_verified_parent)]
 VerifiedParentDep = Annotated[ParentPrincipal, Depends(require_verified_parent)]
+ChildModeDep = Annotated[ChildPrincipal, Depends(get_child_principal)]
+ChildSessionDep = Annotated[ChildPrincipal, Depends(get_child_session)]
