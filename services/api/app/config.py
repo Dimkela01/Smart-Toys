@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     pin_max_attempts: int = 5
     pin_lock_minutes: int = 5
     auth_rate_limit_per_minute: int = 10
+    #: PIN attempts get a separate, roomier bucket: the 5-attempt lock (UC-21) is the real
+    #: control, and sharing the auth bucket would answer 429 before the specified 423
+    pin_rate_limit_per_minute: int = 20
 
     # --- email ---
     smtp_host: str = "localhost"

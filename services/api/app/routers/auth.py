@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.config import settings
-from app.deps import ParentDep, SessionDep, requirements_for
+from app.deps import EmailVerifiedParentDep, ParentDep, SessionDep, requirements_for
 from app.errors import api_error
 from app.models import Parent
 from app.schemas.auth import (
@@ -24,15 +24,24 @@ from app.schemas.auth import (
     RegisterRequest,
     ResendVerificationRequest,
     SessionResponse,
+    SetPinRequest,
     VerifyEmailRequest,
+    VerifyPinRequest,
 )
 from app.security import tokens
-from app.security.lockout import LOGIN, register_failure, reset, seconds_remaining
+from app.security.lockout import LOGIN, PIN, register_failure, reset, seconds_remaining
 from app.security.ratelimit import RateLimit
 from app.services import auth as auth_service
 from app.services import email as email_service
 
 router = APIRouter(prefix="/auth", tags=["auth"], dependencies=[Depends(RateLimit("auth"))])
+
+#: same prefix, own rate-limit bucket (see Settings.pin_rate_limit_per_minute)
+pin_router = APIRouter(
+    prefix="/auth",
+    tags=["auth"],
+    dependencies=[Depends(RateLimit("pin", settings.pin_rate_limit_per_minute))],
+)
 
 REFRESH_COOKIE = "bruno_refresh"
 COOKIE_PATH = "/api/v1/auth"
@@ -223,6 +232,54 @@ async def confirm_password_reset(
     await reset(LOGIN, parent.email)
     _clear_refresh_cookie(response)
     return GenericStatus(status="password_changed")
+
+
+async def _guard_pin_lock(parent: Parent) -> None:
+    """5 wrong PINs lock the PIN for 5 minutes (UC-21 AC, M1 checklist)."""
+    locked_for = await seconds_remaining(PIN, str(parent.id))
+    if locked_for > 0:
+        raise api_error(
+            423, "pin_locked", f"Too many attempts. Try again in {max(locked_for // 60, 1)} minutes."
+        )
+
+
+@pin_router.post("/pin", response_model=MeResponse)
+async def set_pin(
+    payload: SetPinRequest, principal: EmailVerifiedParentDep, session: SessionDep
+) -> MeResponse:
+    """Set or change the 4-digit parent PIN, entered twice (UC-01 step 5).
+
+    Changing an existing PIN requires the current one, so an unattended parent session
+    cannot be used to lock the real parent out of child mode.
+    """
+    parent = principal.parent
+    if parent.has_pin:
+        await _guard_pin_lock(parent)
+        if payload.current_pin is None:
+            raise api_error(400, "current_pin_required", "Enter your current PIN to change it.")
+        if not await auth_service.check_pin(parent, payload.current_pin):
+            await register_failure(PIN, str(parent.id))
+            raise api_error(401, "invalid_pin", "That PIN is not correct.")
+
+    await auth_service.set_pin(session, parent=parent, pin=payload.pin)
+    await reset(PIN, str(parent.id))
+    return MeResponse(parent=_parent_out(parent), requires=requirements_for(parent))
+
+
+@pin_router.post("/pin/verify", response_model=GenericStatus)
+async def verify_pin(payload: VerifyPinRequest, principal: ParentDep, session: SessionDep) -> GenericStatus:
+    """Check the PIN. Used by the parent UI; child mode has its own exit endpoint (UC-21)."""
+    parent = principal.parent
+    if not parent.has_pin:
+        raise api_error(400, "pin_not_set", "Set your parent PIN first.")
+
+    await _guard_pin_lock(parent)
+    if not await auth_service.check_pin(parent, payload.pin):
+        await register_failure(PIN, str(parent.id))
+        raise api_error(401, "invalid_pin", "That PIN is not correct.")
+
+    await reset(PIN, str(parent.id))
+    return GenericStatus(status="pin_ok")
 
 
 @router.get("/me", response_model=MeResponse)

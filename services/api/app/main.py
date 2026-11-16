@@ -46,6 +46,7 @@ app = FastAPI(
 
 
 app.include_router(auth.router, prefix=API_PREFIX)
+app.include_router(auth.pin_router, prefix=API_PREFIX)
 
 
 @app.get("/healthz", tags=["meta"])

@@ -108,6 +108,8 @@ class SetPinRequest(BaseModel):
 
     pin: Pin
     pin_repeat: Pin
+    #: required only when a PIN already exists, so a left-open session cannot change it
+    current_pin: Pin | None = None
 
     @model_validator(mode="after")
     def _must_match(self) -> SetPinRequest:

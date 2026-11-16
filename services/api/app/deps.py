@@ -64,6 +64,15 @@ async def get_parent_principal(
     return ParentPrincipal(parent=parent, device_id=str(payload.get("did", "")))
 
 
+async def require_email_verified_parent(
+    principal: Annotated[ParentPrincipal, Depends(get_parent_principal)],
+) -> ParentPrincipal:
+    """For the step between verifying the address and setting the PIN (UC-01 steps 4-5)."""
+    if not principal.parent.is_verified:
+        raise api_error(403, "email_not_verified", "Confirm your email address first.")
+    return principal
+
+
 async def require_verified_parent(
     principal: Annotated[ParentPrincipal, Depends(get_parent_principal)],
 ) -> ParentPrincipal:
@@ -77,4 +86,5 @@ async def require_verified_parent(
 
 
 ParentDep = Annotated[ParentPrincipal, Depends(get_parent_principal)]
+EmailVerifiedParentDep = Annotated[ParentPrincipal, Depends(require_email_verified_parent)]
 VerifiedParentDep = Annotated[ParentPrincipal, Depends(require_verified_parent)]
