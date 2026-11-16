@@ -16,17 +16,16 @@ help: ## show this help
 	@test -f .env || (cp .env.example .env && echo "created .env from .env.example — review it")
 
 install: .env ## install local (non-docker) dev dependencies
-	cd services/api && uv sync --all-extras
-	cd apps/web && pnpm install
+	cd services/api && uv sync
+	@if [ -f apps/web/package.json ]; then cd apps/web && pnpm install; else echo "skip: apps/web not set up yet"; fi
 
-dev: .env ## start the full stack (web, api, postgres, redis, mailpit)
-	$(COMPOSE) up --build -d
-	@echo
-	@echo "  web      http://localhost:3000"
-	@echo "  api      http://localhost:8000/docs"
-	@echo "  mailpit  http://localhost:8025"
-	@echo
+dev: .env ## start the stack (web, api, postgres, redis, mailpit) and apply migrations
+	@if [ -f apps/web/Dockerfile ]; then $(COMPOSE) up --build -d --wait; else echo "note: apps/web does not exist yet (M1 step 3); starting backend services only"; $(COMPOSE) up --build -d --wait postgres redis mailpit api; fi
 	$(MAKE) migrate
+	@echo
+	@echo "  ports are set in .env (API_PORT, WEB_PORT, MAILPIT_UI_PORT):"
+	@grep -E '^(API_PORT|WEB_PORT|MAILPIT_UI_PORT|POSTGRES_PORT)=' .env | sed 's/^/    /'
+	@echo
 
 up: dev ## alias for dev
 
@@ -54,19 +53,19 @@ seed: ## create the first admin account and print its TOTP provisioning URI
 test: test-api test-e2e ## run all tests
 
 test-api: ## backend tests (pytest); applies migrations to an empty test database
-	$(COMPOSE) up -d postgres redis
-	cd services/api && uv run pytest -q
+	$(COMPOSE) up -d --wait postgres redis
+	cd services/api && uv run pytest
 
 test-e2e: ## Playwright end-to-end test (needs the stack running: make dev)
-	cd apps/web && pnpm exec playwright test
+	@if [ -f apps/web/package.json ]; then cd apps/web && pnpm exec playwright test; else echo "skip: apps/web not set up yet"; fi
 
 lint: ## ruff + mypy + eslint + tsc
 	cd services/api && uv run ruff check . && uv run ruff format --check . && uv run mypy .
-	cd apps/web && pnpm run lint && pnpm exec tsc --noEmit
+	@if [ -f apps/web/package.json ]; then cd apps/web && pnpm run lint && pnpm exec tsc --noEmit; else echo "skip: apps/web not set up yet"; fi
 
 fmt: ## format backend and frontend
 	cd services/api && uv run ruff format . && uv run ruff check --fix .
-	cd apps/web && pnpm exec prettier --write .
+	@if [ -f apps/web/package.json ]; then cd apps/web && pnpm exec prettier --write .; else echo "skip: apps/web not set up yet"; fi
 
 models: .env ## download model weights listed in models/registry.yaml (not needed for M1)
 	cd services/api && uv run python ../../scripts/download_models.py \
