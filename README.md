@@ -8,9 +8,10 @@ The specification in [`docs/`](docs/) is the source of truth — start with
 [`docs/CLAUDE.md`](docs/CLAUDE.md) and [`docs/SPEC.md`](docs/SPEC.md). Work follows the
 milestone order in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 
-**Status: M1 "Skeleton" in progress.** The backend foundation (database, migrations, health
-endpoints) is in place. Auth, child profiles, child mode, the admin login and the web app
-are the remaining M1 steps, so there is no user interface yet.
+**Status: M1 "Skeleton" nearly complete.** Parent accounts, the parent PIN, child profiles,
+child mode and the admin sign-in work end to end, with the web app on top: landing,
+registration and consent, email verification, PIN, dashboard, add-child wizard, the child
+picture picker and a placeholder toy screen. There is no voice yet — that is M2.
 
 ## Requirements
 

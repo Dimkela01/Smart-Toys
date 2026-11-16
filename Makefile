@@ -4,6 +4,8 @@
 #
 SHELL := /bin/bash
 COMPOSE := docker compose -f infra/docker-compose.yml --project-directory .
+# the end-to-end suite needs room inside the auth rate limit; see infra/docker-compose.test.yml
+COMPOSE_TEST := docker compose -f infra/docker-compose.yml -f infra/docker-compose.test.yml --project-directory .
 API := $(COMPOSE) exec -T api
 API_RUN := $(COMPOSE) run --rm -T api
 
@@ -56,8 +58,11 @@ test-api: ## backend tests (pytest); applies migrations to an empty test databas
 	$(COMPOSE) up -d --wait postgres redis
 	cd services/api && uv run pytest
 
-test-e2e: ## Playwright end-to-end test (needs the stack running: make dev)
-	@if [ -f apps/web/package.json ]; then cd apps/web && pnpm exec playwright test; else echo "skip: apps/web not set up yet"; fi
+test-e2e: .env ## Playwright end-to-end run-through (starts the stack with test limits)
+	@if [ ! -f apps/web/package.json ]; then echo "skip: apps/web not set up yet"; exit 0; fi; \
+	$(COMPOSE_TEST) up -d --wait postgres redis mailpit api web; \
+	$(COMPOSE_TEST) exec -T api alembic upgrade head; \
+	set -a; . ./.env; set +a; cd apps/web && pnpm exec playwright test
 
 lint: ## ruff + mypy + eslint + tsc
 	cd services/api && uv run ruff check . && uv run ruff format --check . && uv run mypy .

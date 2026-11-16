@@ -1,0 +1,63 @@
+@import 'tailwindcss';
+
+/*
+ * Two design languages (UI.md): the parent side is a calm, standard mobile app; the child
+ * side is a full-screen toy with no reading required. Mobile first, from 360 px (NFR-01).
+ */
+@theme {
+  --color-parent-bg: #f7f6f3;
+  --color-parent-ink: #1f2420;
+  --color-parent-muted: #5d665f;
+  --color-parent-line: #dcd9d2;
+  --color-parent-accent: #2f6f5e;
+  --color-parent-accent-ink: #ffffff;
+  --color-danger: #a4342b;
+
+  --color-child-bg: #fdf6e8;
+  --color-child-sky: #cfe7f5;
+  --color-paw: #e8743b;
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-parent-bg);
+  color: var(--color-parent-ink);
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Parent UI must work at 200% text size (NFR-08) */
+:focus-visible {
+  outline: 3px solid var(--color-parent-accent);
+  outline-offset: 2px;
+}
+
+/* The child screen never scrolls and has nothing to select or drag (NFR-07) */
+.child-screen {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--color-child-sky) 0%, var(--color-child-bg) 55%);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

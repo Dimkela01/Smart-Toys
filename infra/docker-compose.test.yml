@@ -1,0 +1,11 @@
+# Overrides used only by `make test-e2e`.
+#
+# The end-to-end suite registers, verifies and signs in several parents within a minute,
+# all from one address, so it runs straight into the 10/min/IP auth limit from NFR-06.
+# The limit is correct for the real app, so the suite gets its own value instead of the
+# development default being weakened. `make dev` puts the normal limit back.
+services:
+  api:
+    environment:
+      AUTH_RATE_LIMIT_PER_MINUTE: "500"
+      PIN_RATE_LIMIT_PER_MINUTE: "500"

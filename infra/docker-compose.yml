@@ -97,7 +97,8 @@ services:
       - ./apps/web:/srv/web
       - web_node_modules:/srv/web/node_modules
       - web_next:/srv/web/.next
-    command: ["pnpm", "dev"]
+    # node_modules is a named volume (empty on first run), so install before starting
+    command: ["sh", "-c", "pnpm install --prefer-offline && pnpm dev"]
 
 volumes:
   pgdata:
