@@ -31,6 +31,21 @@ dev: .env ## start the stack (web, api, postgres, redis, mailpit) and apply migr
 
 up: dev ## alias for dev
 
+phone: .env ## open the app on a phone on the same network (detects this machine's address)
+	@ip=$$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || hostname -I 2>/dev/null | awk '{print $$1}'); \
+	if [ -z "$$ip" ]; then echo "could not find a LAN address; are you on Wi-Fi?"; exit 1; fi; \
+	web=$$(grep '^WEB_PORT=' .env | cut -d= -f2); mail=$$(grep '^MAILPIT_UI_PORT=' .env | cut -d= -f2); \
+	tmp=$$(mktemp); \
+	sed -e "s|^PUBLIC_WEB_URL=.*|PUBLIC_WEB_URL=http://$$ip:$$web|" \
+	    -e "s|^DEV_ALLOWED_ORIGINS=.*|DEV_ALLOWED_ORIGINS=$$ip|" .env > $$tmp && mv $$tmp .env; \
+	grep -q '^DEV_ALLOWED_ORIGINS=' .env || echo "DEV_ALLOWED_ORIGINS=$$ip" >> .env; \
+	$(COMPOSE) up -d --force-recreate --wait api web >/dev/null; \
+	echo; \
+	echo "  On the phone (same Wi-Fi), open:   http://$$ip:$$web"; \
+	echo "  Verification emails land here:     http://$$ip:$$mail"; \
+	echo; \
+	echo "  Run this again whenever the machine changes network."
+
 down: ## stop the stack
 	$(COMPOSE) down
 

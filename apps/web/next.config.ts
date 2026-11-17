@@ -22,9 +22,20 @@ const csp = [
   "form-action 'self'",
 ].join('; ');
 
+/**
+ * Hosts allowed to reach the dev server from outside this machine, so the app can be
+ * opened on a real phone on the same network (NFR-01 asks for iOS Safari). Comma
+ * separated, e.g. DEV_ALLOWED_ORIGINS=192.168.1.86
+ */
+const devOrigins = (process.env.DEV_ALLOWED_ORIGINS ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  ...(devOrigins.length > 0 ? { allowedDevOrigins: devOrigins } : {}),
   async rewrites() {
     return [{ source: '/api/v1/:path*', destination: `${apiTarget}/api/v1/:path*` }];
   },

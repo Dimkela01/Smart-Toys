@@ -89,6 +89,8 @@ services:
       # server-side rewrite target, so browser cookies stay first-party (one origin)
       API_INTERNAL_URL: http://api:8000
       NODE_ENV: development
+      # lets a phone on the same network open the dev server (see .env)
+      DEV_ALLOWED_ORIGINS: ${DEV_ALLOWED_ORIGINS:-}
     depends_on:
       - api
     ports:
