@@ -20,6 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     false,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -54,7 +55,10 @@ class Child(Base):
     nickname: Mapped[str] = mapped_column(String(20), nullable=False)
     age: Mapped[int] = mapped_column(Integer, nullable=False)
     language: Mapped[str] = mapped_column(String(2), nullable=False)
-    interests: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    #: the server default is added by the M2 migration; see app/models/conversation.py
+    interests: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
     avatar_id: Mapped[str] = mapped_column(String(32), nullable=False)
     character_id: Mapped[str] = mapped_column(String(32), nullable=False)
     #: whether the "parents can see" line has been said (SAFETY.md §8, used from M2)

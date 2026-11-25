@@ -1,8 +1,7 @@
-"""SQLAlchemy models for the M1 tables (DATA_MODEL.md §2.1, §2.2).
+"""SQLAlchemy models (DATA_MODEL.md §2.1-§2.3).
 
-Conversation, memory and evaluation tables (§2.3–§2.5) arrive with the milestones that
-use them: turns/sessions/metrics in M2, events/alerts in M3/M5, memory in M5, models and
-evaluation in M6.
+The rest arrive with the milestones that use them: events/alerts in M3, memory and
+activity state in M5, models and evaluation in M6.
 """
 
 from app.models.accounts import (
@@ -25,6 +24,14 @@ from app.models.children import (
     Child,
     ChildSettings,
 )
+from app.models.conversation import (
+    ROUTER_DECISIONS,
+    SESSION_END_REASONS,
+    TURN_ERROR_CODES,
+    Session,
+    Turn,
+    TurnMetrics,
+)
 
 __all__ = [
     "ACTIVITIES",
@@ -34,6 +41,9 @@ __all__ = [
     "MAX_BLOCKED_TOPICS",
     "MAX_CHILDREN_PER_PARENT",
     "MAX_INTERESTS",
+    "ROUTER_DECISIONS",
+    "SESSION_END_REASONS",
+    "TURN_ERROR_CODES",
     "USER_TYPES",
     "Admin",
     "AuditLog",
@@ -43,4 +53,7 @@ __all__ = [
     "Consent",
     "Parent",
     "RefreshToken",
+    "Session",
+    "Turn",
+    "TurnMetrics",
 ]
