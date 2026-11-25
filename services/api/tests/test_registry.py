@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -68,8 +69,26 @@ def test_no_model_is_hard_coded_in_the_backend() -> None:
 
 
 def test_weights_are_not_committed() -> None:
-    weights = list((REPO_ROOT / "models").rglob("*.gguf")) + list((REPO_ROOT / "models").rglob("*.bin"))
-    assert weights == [], f"model weights must never be committed: {weights}"
+    """Ask git, not the filesystem.
+
+    `make models` puts real weights in models/weights/, so looking for files on disk
+    failed the moment they were downloaded - which is the normal state of a working
+    checkout, not a mistake. What must stay true is that git never tracks them.
+    """
+    listed = subprocess.run(
+        ["git", "ls-files", "--", "models"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if listed.returncode != 0:  # pragma: no cover - not a git checkout (e.g. in a container)
+        pytest.skip("not a git checkout")
+    tracked = [
+        name for name in listed.stdout.split() if name.endswith((".gguf", ".bin", ".pth", ".onnx", ".pt"))
+    ]
+    assert tracked == [], f"model weights must never be committed: {tracked}"
+    assert "models/weights/" in (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
 
 
 def test_registry_has_no_absolute_local_paths(registry: dict[str, Any]) -> None:

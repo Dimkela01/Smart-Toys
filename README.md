@@ -32,6 +32,19 @@ picture picker and a placeholder toy screen. There is no voice yet — that is M
 6. `make lint` — ruff, mypy, and eslint/tsc once the web app exists.
 7. `make down` — stop everything. `make clean` also deletes the database volume.
 
+### Testing on a real phone
+
+- `make phone` — finds this machine's address and prints a plain-http URL for a phone on
+  the same Wi-Fi.
+- `make https` — the same, over https, through a Caddy front door with its own local
+  certificate authority. **A microphone only works in a secure context**, so from M2
+  onwards the paw cannot record over plain http. The target prints the one-time steps for
+  trusting the certificate on the phone, and uses this machine's `.local` name, so it
+  survives a change of IP address. `make https-stop` closes that door again.
+- `make models` — downloads the model weights named in `models/registry.yaml` and checks
+  each one against a recorded sha256. Weights are never committed. Gemma is gated by
+  Google: accept the terms on its model page and `export HF_TOKEN` before running.
+
 Set a real `JWT_SECRET` in `.env` before anything leaves your machine
 (`python3 -c "import secrets; print(secrets.token_urlsafe(48))"`).
 

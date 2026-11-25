@@ -5,8 +5,9 @@
 # in docs/EVALUATION.md; `default` below is only the starting point for M2.
 #
 # Weights are never committed. `make models` downloads them into models/weights/ and
-# verifies sha256 (scripts/download_models.py). The sha256 values below must be filled in
-# when the weights are first downloaded (M2); `null` means "not yet verified".
+# verifies sha256 (scripts/download_models.py). The digests below were recorded on first
+# download, 2026-11-25, and are checked on every run; `null` means "not yet verified".
+# `files:` may be a list of paths or, once recorded, a mapping of path -> sha256.
 version: 1
 default: qwen3-1.7b
 
@@ -20,9 +21,11 @@ models:
     runtime: llama.cpp
     license: apache-2.0
     source:
-      repo: Qwen/Qwen3-1.7B-GGUF
+      # Qwen's own GGUF repo publishes Q8_0 only; this is the documented Q4_K_M
+      # (docs/CLAUDE.md §3), re-quantized by unsloth under the same apache-2.0.
+      repo: unsloth/Qwen3-1.7B-GGUF
       path: Qwen3-1.7B-Q4_K_M.gguf
-      sha256: null
+      sha256: b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897
     options:
       # Qwen3 thinking must stay off; <think> is stripped defensively (ARCHITECTURE.md §6.3)
       enable_thinking: false
@@ -33,8 +36,9 @@ models:
 
   - id: gemma3-1b
     family: gemma3
-    file: gemma-3-1b-it-Q4_K_M.gguf
-    quant: Q4_K_M
+    file: gemma-3-1b-it-q4_0.gguf
+    # the QAT release is q4_0; there is no Q4_K_M in Google's own repo
+    quant: Q4_0
     size_mb: 806
     context: 2048
     runtime: llama.cpp
@@ -43,6 +47,9 @@ models:
       repo: google/gemma-3-1b-it-qat-q4_0-gguf
       path: gemma-3-1b-it-q4_0.gguf
       sha256: null
+      # Google gates this repo: accept the terms on the model page and export
+      # HF_TOKEN before `make models`. Only used by the benchmark (active_envs: eval).
+      gated: true
     options: {}
     endpoints:
       server: ${LLM_SERVER_URL}/v1
@@ -58,9 +65,9 @@ models:
     runtime: llama.cpp
     license: apache-2.0
     source:
-      repo: Qwen/Qwen3-0.6B-GGUF
+      repo: unsloth/Qwen3-0.6B-GGUF
       path: Qwen3-0.6B-Q4_K_M.gguf
-      sha256: null
+      sha256: ac2d97712095a558e31573f62f466a3f9d93990898b0ec79d7c974c1780d524a
     options:
       enable_thinking: false
     endpoints:
@@ -77,7 +84,12 @@ stt:
     license: mit
     source:
       repo: Systran/faster-whisper-base
-      sha256: null
+      # a CTranslate2 model is a set of files, all of them required
+      files:
+        config.json: 56a6d8110d311f19c8f0471e562832c7527f146b567275bfca59fcf7c184da9a
+        model.bin: d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9
+        tokenizer.json: fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab
+        vocabulary.txt: 34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913
 
 tts:
   - id: kokoro-82m
@@ -87,14 +99,28 @@ tts:
     internal_only: false
     source:
       repo: hexgrad/Kokoro-82M
-      sha256: null
+      files:
+        config.json: 5abb01e2403b072bf03d04fde160443e209d7a0dad49a423be15196b9b43c17f
+        kokoro-v1_0.pth: 496dba118d1a58f5f3db2efc88dbdc216e0483fc89fe6e47ee1f2c53f18ad1e4
+        # one female and one male US voice; the other 52 are not downloaded
+        voices/af_heart.pt: 0ab5709b8ffab19bfd849cd11d98f75b60af7733253ad0d67b12382a102cb4ff
+        voices/am_michael.pt: 9a443b79a4b22489a5b0ab7c651a0bcd1a30bef675c28333f06971abbd47bd37
   - id: piper-sr-placeholder
     runtime: piper
     language: sr
-    # license not confirmed — internal demos only, never a public demo URL (docs/CLAUDE.md §3)
-    license: unconfirmed
+    # Checked 2026-11-25: this is the only sr voice in piper-voices, and its dataset
+    # (https://github.com/marytts/serbski-institut-dsb-data) is CC BY-NC-SA 4.0, so it
+    # may never be used commercially - not "until confirmed" but at all. Worse, `dsb` is
+    # Lower Sorbian and "Serbski institut" is the Sorbian Institute, so the voice is
+    # probably not Serbian despite the sr_RS label. Samples are downloaded for a
+    # native speaker to judge. A real Serbian voice is an open question for M2.
+    license: cc-by-nc-sa-4.0
     internal_only: true
     source:
       repo: rhasspy/piper-voices
-      path: sr/sr_RS/placeholder/medium
-      sha256: null
+      files:
+        sr/sr_RS/serbski_institut/medium/sr_RS-serbski_institut-medium.onnx: d7003890cf596e653f660a4fd97fd17f57f1eceb6d9727abad9cd76d2fda0d80
+        sr/sr_RS/serbski_institut/medium/sr_RS-serbski_institut-medium.onnx.json: 39ad6531b46ac629c0bed10aa9205dd2431e2dab3808b8535808711db87c2bc0
+        sr/sr_RS/serbski_institut/medium/MODEL_CARD: 1ed2209d4d01b359416f17772c6c11272bdb59359d0b0b076e31a5ccb87446ac
+        sr/sr_RS/serbski_institut/medium/samples/speaker_0.mp3: ff36e3931e2747436eb490bcd4948697d4c0742e80c3ee63ce033262ae2f9764
+        sr/sr_RS/serbski_institut/medium/samples/speaker_1.mp3: 5570deca2bde938f386133639c1873a6b79cd5419e7cc3ab1de790d7b93eca4a

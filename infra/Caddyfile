@@ -1,0 +1,43 @@
+# HTTPS for development, so a real phone can use the microphone (M2).
+#
+# getUserMedia only works in a secure context. localhost counts as one; a LAN address over
+# plain http does not, so the paw cannot record on a phone without this.
+#
+# Certificates come from Caddy's own local CA (`local_certs`), which keeps everything on
+# the Wi-Fi. That matters here: the Serbian placeholder voice is CC BY-NC-SA, so the demo
+# must not be exposed through a public tunnel (docs/CLAUDE.md §3).
+#
+# The phone trusts this CA once, by installing the root certificate served below.
+
+{
+	admin off
+	local_certs
+	# nothing here should try to reach a public ACME server
+	auto_https disable_redirects
+}
+
+# One origin for everything: Caddy -> web (Next.js), and Next rewrites /api/v1/* to the
+# API itself, so the refresh cookie stays first-party exactly as it does over http.
+https://{$HTTPS_HOST:localhost} {
+	encode gzip
+	reverse_proxy web:3000 {
+		# The address Caddy actually saw, replacing anything the caller sent. The API
+		# believes this only when TRUST_PROXY_HEADERS is on, which is for deployment:
+		# development also serves plain http on another port, where no proxy vouches
+		# for the header, so it stays off there and one bucket is shared (NFR-06).
+		header_up X-Forwarded-For {remote_host}
+	}
+}
+
+# Plain http, only to hand out the root certificate the phone has to trust.
+http://{$HTTPS_HOST:localhost} {
+	handle /bruno-root.crt {
+		root * /data/caddy/pki/authorities/local
+		rewrite * /root.crt
+		header Content-Type application/x-x509-ca-cert
+		file_server
+	}
+	handle {
+		redir https://{host}{uri}
+	}
+}
