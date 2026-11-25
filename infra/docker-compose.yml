@@ -64,6 +64,7 @@ services:
       SMTP_PORT: "1025"
       # the container does not see the repo root, so the shared files are mounted
       CONTENT_DIR: /srv/content
+      PROMPTS_DIR: /srv/prompts
       MODEL_REGISTRY_PATH: /srv/models/registry.yaml
       # Nothing trustworthy sets X-Forwarded-For in development, so every browser request
       # arrives from the web container and shares one rate-limit bucket. NFR-06's 10/min
@@ -81,6 +82,7 @@ services:
     volumes:
       - ./services/api:/srv/api
       - ./content:/srv/content:ro
+      - ./prompts:/srv/prompts:ro
       - ./models:/srv/models:ro
     command:
       ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

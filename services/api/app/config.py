@@ -97,6 +97,8 @@ class Settings(BaseSettings):
     # --- versioned content (characters, avatars, lessons; NFR-11) ---
     #: mounted read-only into the api container, which does not see the repo root
     content_dir: str = str(REPO_ROOT / "content")
+    #: system prompts, versioned in the repository the same way (SAFETY.md §5)
+    prompts_dir: str = str(REPO_ROOT / "prompts")
 
     # --- retention (DATA_MODEL.md §6) ---
     transcript_retention_days: int = 30
