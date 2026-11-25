@@ -21,6 +21,7 @@ import redis
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
+from app import db
 from app.config import settings
 from app.db import get_session
 from app.main import app
@@ -178,7 +179,9 @@ async def session(session_factory: async_sessionmaker[AsyncSession]) -> AsyncIte
 
 
 @pytest.fixture
-async def client(session_factory: async_sessionmaker[AsyncSession]) -> AsyncIterator[AsyncClient]:
+async def client(
+    session_factory: async_sessionmaker[AsyncSession], monkeypatch: pytest.MonkeyPatch
+) -> AsyncIterator[AsyncClient]:
     async def override() -> AsyncIterator[AsyncSession]:
         async with session_factory() as opened:
             try:
@@ -189,6 +192,10 @@ async def client(session_factory: async_sessionmaker[AsyncSession]) -> AsyncIter
                 raise
 
     app.dependency_overrides[get_session] = override
+    # The turn WebSocket outlives a request, so it opens its own short transactions
+    # through db.session_scope() instead of the dependency. Point that at the test
+    # database too, or a test would quietly write into the development one.
+    monkeypatch.setattr(db, "SessionFactory", session_factory)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as opened:
         yield opened
     app.dependency_overrides.clear()

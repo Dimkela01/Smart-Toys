@@ -1,7 +1,7 @@
 """FastAPI application.
 
-M1 exposes health endpoints only; auth, children, child mode and admin routers are added
-in the following steps of M1.
+Parent, child-mode and admin REST routers, plus the turn WebSocket from M2. Metrics and
+model names are admin-only and never appear in a parent or child response.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.db import engine
 from app.redis_client import close_redis
-from app.routers import admin, auth, child_mode, children, meta
+from app.routers import admin, auth, child_mode, children, meta, turns
 
 logger = logging.getLogger("app")
 
@@ -51,6 +51,9 @@ app.include_router(children.router, prefix=API_PREFIX)
 app.include_router(child_mode.router, prefix=API_PREFIX)
 app.include_router(meta.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
+# the turn WebSocket; its own authentication, because a browser cannot set a header on
+# a WebSocket (see app/routers/turns.py)
+app.include_router(turns.router, prefix=API_PREFIX)
 
 
 @app.get("/healthz", tags=["meta"])

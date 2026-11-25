@@ -93,6 +93,13 @@ class Settings(BaseSettings):
     device_tunnel_url: str = ""
     device_tunnel_token: str = ""
     model_registry_path: str = str(REPO_ROOT / "models" / "registry.yaml")
+    #: llama-server's parallel slots (ARCHITECTURE.md §6.3). Requests beyond them wait,
+    #: rather than being accepted and making every answer slow together.
+    llm_parallel: int = 2
+    #: §6.3: how long a child may wait for a slot before hearing the fallback line
+    llm_queue_max_wait_seconds: float = 10.0
+    #: ARCHITECTURE.md §9: turns 20/min per child
+    turn_rate_limit_per_minute: int = 20
 
     # --- versioned content (characters, avatars, lessons; NFR-11) ---
     #: mounted read-only into the api container, which does not see the repo root
