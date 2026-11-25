@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { PASSWORD, PIN, addChild, registerAndVerify, setPin, uniqueEmail } from './helpers';
 
 /**
  * The M1 run-through from the quality bar (docs/CLAUDE.md §5), at 360x740:
@@ -6,84 +7,10 @@ import { expect, test, type Page } from '@playwright/test';
  *   register -> verify by email -> set PIN -> add child -> child mode ->
  *   pick picture -> toy screen -> exit with the corner press and the PIN -> dashboard
  *
- * The "hold paw, hear an answer" part of that journey needs the voice pipeline and is
- * added in M2; here the paw only has to move the character.
+ * The voice half of that journey - hold the paw, hear an answer - is m2.spec.ts.
  *
- * Mail is read from Mailpit, so the verification link is followed exactly as a parent
- * would follow it.
+ * Setup helpers live in ./helpers, shared with the M2 run-through.
  */
-
-const MAILPIT = process.env.MAILPIT_API ?? 'http://localhost:8026/api/v1';
-const PASSWORD = 'dovoljno-duga-sifra';
-const PIN = '4821';
-
-function uniqueEmail(): string {
-  return `e2e-${Date.now()}-${Math.floor(Math.random() * 1000)}@example.com`;
-}
-
-async function linkFromLatestEmail(page: Page, address: string): Promise<string> {
-  // Mailpit needs a moment to receive the message
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const list = await page.request.get(`${MAILPIT}/search?query=${encodeURIComponent(address)}`);
-    if (list.ok()) {
-      const body = (await list.json()) as { messages?: { ID: string }[] };
-      const id = body.messages?.[0]?.ID;
-      if (id) {
-        const message = await page.request.get(`${MAILPIT}/message/${id}`);
-        const text = ((await message.json()) as { Text?: string }).Text ?? '';
-        const found = /https?:\/\/\S+token=[A-Za-z0-9._-]+/.exec(text);
-        if (found) return found[0];
-      }
-    }
-    await page.waitForTimeout(500);
-  }
-  throw new Error(`no verification link for ${address}`);
-}
-
-async function registerAndVerify(page: Page, address: string): Promise<void> {
-  await page.goto('/register');
-  await page.getByLabel('Email adresa').fill(address);
-  await page.getByLabel('Šifra').fill(PASSWORD);
-  await page.getByRole('checkbox').first().check();
-  await page.getByRole('checkbox').nth(1).check();
-  await page.getByRole('button', { name: 'Napravi račun' }).click();
-  await expect(page.getByRole('heading', { name: 'Proverite email' })).toBeVisible();
-
-  const link = await linkFromLatestEmail(page, address);
-  await page.goto(new URL(link).pathname + new URL(link).search);
-  await expect(page.getByRole('heading', { name: 'Adresa je potvrđena' })).toBeVisible();
-}
-
-async function setPin(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Postavi PIN' }).click();
-  // the dev server may still be compiling /pin on a cold container
-  await page.waitForURL('**/pin');
-  await page.getByLabel('PIN', { exact: true }).fill(PIN);
-  await page.getByLabel('Ponovite PIN').fill(PIN);
-  await page.getByRole('button', { name: 'Sačuvaj PIN' }).click();
-  await expect(page.getByRole('heading', { name: 'Vaša deca' })).toBeVisible();
-}
-
-async function addChild(page: Page, nickname: string, avatarLabel: string): Promise<void> {
-  await page.getByRole('button', { name: 'Dodaj dete' }).click();
-  await expect(page.getByRole('heading', { name: 'Ko je dete?' })).toBeVisible();
-
-  await page.getByLabel('Nadimak').fill(nickname);
-  await page.getByRole('button', { name: '6', exact: true }).click();
-  await page.getByRole('button', { name: 'Srpski' }).click();
-  await page.getByRole('button', { name: 'Dalje' }).click();
-
-  await expect(page.getByRole('heading', { name: 'Šta voli i koja je slika?' })).toBeVisible();
-  await page.getByRole('button', { name: 'Životinje' }).click();
-  await page.getByRole('button', { name: avatarLabel }).click();
-  await page.getByRole('button', { name: 'Dalje' }).click();
-
-  await expect(page.getByRole('heading', { name: 'Koji lik?' })).toBeVisible();
-  await page.getByRole('button', { name: 'Bruno' }).click();
-  await page.getByRole('button', { name: 'Napravi profil' }).click();
-
-  await expect(page.getByRole('heading', { name: nickname })).toBeVisible();
-}
 
 test.describe('M1 run-through', () => {
   test('a parent can register, add a child, hand the phone over and take it back', async ({
@@ -137,11 +64,7 @@ test.describe('M1 run-through', () => {
         await expect(page.getByRole('button', { name })).toBeVisible();
       }
 
-      // holding the paw moves the character; no text ever appears for the child
-      await paw.hover();
-      await page.mouse.down();
-      await expect(page.locator('.character--listening')).toBeVisible();
-      await page.mouse.up();
+      // What the paw then does with the microphone and the socket is m2.spec.ts.
       await expect(page.locator('.character--idle')).toBeVisible();
 
       // tapping a card is acknowledged, then Bruno settles back down rather than

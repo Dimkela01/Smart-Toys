@@ -51,16 +51,19 @@ export function useVoice(token: string | null, language: string): Voice {
   const [inputLevel, setInputLevel] = useState(0);
   const [mouth, setMouth] = useState(0);
   const [connected, setConnected] = useState(false);
+  // state, not a ref: when the microphone turns out to be unusable the paw has to
+  // actually become disabled, which needs a render
+  const [possible, setPossible] = useState(isRecordingPossible);
 
   const mic = useRef<Microphone | null>(null);
   const player = useRef<Player>(new Player());
   const socket = useRef<TurnSocket | null>(null);
   const voice = useRef<FallbackVoice | null>(null);
   const turnId = useRef(0);
+  /** The label of the turn actually started, or null if none was. */
+  const sentTurn = useRef<string | null>(null);
   const holding = useRef(false);
   const capTimer = useRef<number | null>(null);
-  const possible = useRef(isRecordingPossible());
-
   const clearCap = useCallback(() => {
     if (capTimer.current !== null) {
       window.clearTimeout(capTimer.current);
@@ -116,14 +119,22 @@ export function useVoice(token: string | null, language: string): Voice {
     clearCap();
     setInputLevel(0);
     mic.current?.stop();
+
     const connection = socket.current;
-    if (connection === null) return;
-    connection.endTurn(`t${turnId.current}`);
+    const label = sentTurn.current;
+    sentTurn.current = null;
+    if (connection === null || label === null) {
+      // the microphone never opened, so no turn was started: releasing must put Bruno
+      // back to idle rather than leave him thinking about something never sent
+      setState('idle');
+      return;
+    }
+    connection.endTurn(label);
     setState('thinking');
   }, [clearCap]);
 
   const press = useCallback(async (): Promise<void> => {
-    if (!possible.current || holding.current) return;
+    if (!possible || holding.current) return;
     const connection = socket.current;
     if (connection === null || !connection.open) return;
 
@@ -131,15 +142,21 @@ export function useVoice(token: string | null, language: string): Voice {
     player.current.stop();
     setMouth(0);
     holding.current = true;
+    // Immediately, before awaiting anything: the child has pressed and must see that
+    // they are being listened to. Opening the microphone takes a moment on the first
+    // press of a session, and a character that only reacts afterwards feels broken.
+    setState('listening');
 
     if (mic.current === null) mic.current = new Microphone();
     const microphone = mic.current;
     try {
       // inside the gesture, which is the only time iOS will resume a context
       await microphone.open();
-    } catch {
+    } catch (error) {
+      // a parent reads the console; the child only ever sees Bruno settle back down
+      console.error('the microphone could not be opened', error);
       holding.current = false;
-      possible.current = false;
+      setPossible(false);
       setState('idle');
       return;
     }
@@ -160,7 +177,7 @@ export function useVoice(token: string | null, language: string): Voice {
 
     turnId.current += 1;
     const label = `t${turnId.current}`;
-    setState('listening');
+    sentTurn.current = label;
     connection.startTurn(label);
     microphone.start((frame: Frame) => {
       setInputLevel(frame.rms);
@@ -173,13 +190,13 @@ export function useVoice(token: string | null, language: string): Voice {
       capTimer.current = null;
       if (holding.current) release();
     }, MAX_PRESS_MS);
-  }, [clearCap, language, release]);
+  }, [clearCap, language, possible, release]);
 
   return {
     state,
     inputLevel,
     mouth,
-    possible: possible.current,
+    possible,
     connected,
     pressDown: () => void press(),
     pressUp: release,

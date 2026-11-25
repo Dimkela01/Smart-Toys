@@ -62,12 +62,17 @@ export class Microphone {
       await this.context.resume();
     }
     if (this.stream === null) {
+      // Every constraint here is `ideal`, never exact. A bare `channelCount: 1` is a
+      // hard requirement: a device that cannot capture single-channel then fails the
+      // whole call rather than handing over stereo we could use perfectly well. Mono is
+      // enforced downstream anyway - the worklet reads channel 0 and ignores the rest -
+      // so none of these four is worth losing the microphone over.
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          channelCount: { ideal: 1 },
+          echoCancellation: { ideal: true },
+          noiseSuppression: { ideal: true },
+          autoGainControl: { ideal: true },
         },
       });
     }
