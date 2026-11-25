@@ -61,6 +61,12 @@ services:
       # the container does not see the repo root, so the shared files are mounted
       CONTENT_DIR: /srv/content
       MODEL_REGISTRY_PATH: /srv/models/registry.yaml
+      # Nothing trustworthy sets X-Forwarded-For in development, so every browser request
+      # arrives from the web container and shares one rate-limit bucket. NFR-06's 10/min
+      # would then be shared by the laptop and the phone, so development gets more room;
+      # production keeps 10 and turns TRUST_PROXY_HEADERS on behind Caddy.
+      AUTH_RATE_LIMIT_PER_MINUTE: ${AUTH_RATE_LIMIT_PER_MINUTE:-60}
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
     depends_on:
       postgres:
         condition: service_healthy

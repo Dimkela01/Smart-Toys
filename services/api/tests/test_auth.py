@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models import Consent, Parent
 from app.security import tokens
-from tests.conftest import token_from_email
+from tests.conftest import DEFAULT_PASSWORD, DEFAULT_PIN, create_parent, token_from_email
 
 EMAIL = "parent@example.com"
 PASSWORD = "dovoljno-duga-sifra"
@@ -208,7 +208,7 @@ async def test_successful_login_clears_the_failure_counter(
 
 
 async def test_refresh_rotates_and_detects_reuse(
-    client: AsyncClient, sent_emails: list[dict[str, str]]
+    client: AsyncClient, sent_emails: list[dict[str, str]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     await register_and_verify(client, sent_emails)
     first_cookie = client.cookies.get("bruno_refresh")
@@ -218,7 +218,8 @@ async def test_refresh_rotates_and_detects_reuse(
     assert rotated.status_code == 200
     assert client.cookies.get("bruno_refresh") != first_cookie
 
-    # replaying the old cookie must fail and drop the device
+    # replaying the old cookie much later must fail and drop the device
+    monkeypatch.setattr(settings, "refresh_reuse_grace_seconds", 0)
     client.cookies.set("bruno_refresh", first_cookie)
     replayed = await client.post("/api/v1/auth/refresh")
     assert replayed.status_code == 401
@@ -296,3 +297,172 @@ async def test_a_non_parent_token_cannot_reach_a_parent_route(client: AsyncClien
     response = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {child_token}"})
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "wrong_token_type"
+
+
+# --- regressions found auditing M1 -------------------------------------------------------
+
+
+async def test_two_tabs_refreshing_at_once_keep_the_session(
+    client: AsyncClient, sent_emails: list[dict[str, str]]
+) -> None:
+    """A benign rotation race is not a leak (it used to sign the parent out).
+
+    Two tabs loading together both send the cookie the browser had, and only one can be
+    first to rotate it. Treating the loser as a replay revoked the device, so opening a
+    second tab logged the parent out of the account they were sitting in front of.
+    """
+    await register_and_verify(client, sent_emails)
+    shared_cookie = client.cookies.get("bruno_refresh")
+    assert shared_cookie
+
+    first = await client.post("/api/v1/auth/refresh")
+    assert first.status_code == 200
+    rotated_cookie = client.cookies.get("bruno_refresh")
+    assert rotated_cookie and rotated_cookie != shared_cookie
+
+    # the second tab's request was already in flight with the old value
+    client.cookies.set("bruno_refresh", shared_cookie)
+    second = await client.post("/api/v1/auth/refresh")
+    assert second.status_code == 200, second.text
+    assert second.json()["access_token"]
+
+    # and the winner's cookie still works, so nothing was revoked behind its back
+    client.cookies.set("bruno_refresh", rotated_cookie)
+    assert (await client.post("/api/v1/auth/refresh")).status_code == 200
+
+
+async def test_verify_binds_the_session_to_the_device_that_opened_the_link(
+    client: AsyncClient, sent_emails: list[dict[str, str]]
+) -> None:
+    """Two devices following the same link must not revoke each other (ARCHITECTURE.md §9).
+
+    The device id used to be derived from the account, so every browser looked like one
+    device: the second to open a link revoked the first's refresh token, the first then
+    tripped the replay check and dropped itself, and child mode on one phone would have
+    locked the other.
+    """
+    await register(client)
+    link_token = token_from_email(sent_emails[-1])
+
+    phone = await client.post(
+        "/api/v1/auth/verify", json={"token": link_token, "device_id": "phone-aaaaaaaa"}
+    )
+    assert phone.status_code == 200, phone.text
+    phone_cookie = client.cookies.get("bruno_refresh")
+    assert phone_cookie
+
+    laptop = await client.post(
+        "/api/v1/auth/verify", json={"token": link_token, "device_id": "laptop-bbbbbbbb"}
+    )
+    assert laptop.status_code == 200, laptop.text
+    laptop_cookie = client.cookies.get("bruno_refresh")
+    assert laptop_cookie != phone_cookie
+
+    # the phone's session survives the laptop signing in
+    client.cookies.set("bruno_refresh", phone_cookie)
+    still_there = await client.post("/api/v1/auth/refresh")
+    assert still_there.status_code == 200, still_there.text
+
+
+async def test_a_forgotten_pin_is_reset_with_the_account_password(
+    client: AsyncClient, sent_emails: list[dict[str, str]]
+) -> None:
+    """UC-21 AC: the PIN is reset from the parent login.
+
+    Requiring the current PIN and nothing else meant a parent who forgot it could never
+    set another one.
+    """
+    headers = await create_parent(client, sent_emails, email="forgot-pin@example.com")
+
+    without_proof = await client.post(
+        "/api/v1/auth/pin", json={"pin": "1111", "pin_repeat": "1111"}, headers=headers
+    )
+    assert without_proof.status_code == 400
+    assert without_proof.json()["detail"]["code"] == "current_pin_required"
+
+    wrong_password = await client.post(
+        "/api/v1/auth/pin",
+        json={"pin": "1111", "pin_repeat": "1111", "password": "not-the-password"},
+        headers=headers,
+    )
+    assert wrong_password.status_code == 401
+
+    reset_it = await client.post(
+        "/api/v1/auth/pin",
+        json={"pin": "1111", "pin_repeat": "1111", "password": DEFAULT_PASSWORD},
+        headers=headers,
+    )
+    assert reset_it.status_code == 200, reset_it.text
+
+    # the new PIN works and the old one does not
+    assert (
+        await client.post("/api/v1/auth/pin/verify", json={"pin": "1111"}, headers=headers)
+    ).status_code == 200
+    assert (
+        await client.post("/api/v1/auth/pin/verify", json={"pin": DEFAULT_PIN}, headers=headers)
+    ).status_code == 401
+
+
+async def test_the_current_pin_still_changes_the_pin(
+    client: AsyncClient, sent_emails: list[dict[str, str]]
+) -> None:
+    headers = await create_parent(client, sent_emails, email="change-pin@example.com")
+    changed = await client.post(
+        "/api/v1/auth/pin",
+        json={"pin": "2222", "pin_repeat": "2222", "current_pin": DEFAULT_PIN},
+        headers=headers,
+    )
+    assert changed.status_code == 200, changed.text
+
+    wrong = await client.post(
+        "/api/v1/auth/pin",
+        json={"pin": "3333", "pin_repeat": "3333", "current_pin": "9999"},
+        headers=headers,
+    )
+    assert wrong.status_code == 401
+    assert wrong.json()["detail"]["code"] == "invalid_pin"
+
+
+async def test_a_forged_forwarded_header_cannot_buy_a_new_rate_limit_bucket(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """NFR-06 is per IP, and the caller does not get to say what their IP is.
+
+    Reading the first X-Forwarded-For entry made the limit free to bypass: a different
+    value on every request meant a fresh bucket on every request.
+    """
+    monkeypatch.setattr(settings, "auth_rate_limit_per_minute", 3)
+    monkeypatch.setattr(settings, "trust_proxy_headers", False)
+
+    codes = [
+        (
+            await client.post(
+                "/api/v1/auth/verify/resend",
+                json={"email": "nobody@example.com"},
+                headers={"X-Forwarded-For": f"198.51.100.{index}"},
+            )
+        ).status_code
+        for index in range(1, 7)
+    ]
+    assert 429 in codes, codes
+
+
+async def test_behind_a_trusted_proxy_the_last_hop_identifies_the_caller(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With a proxy we control, its own appended entry is the one to believe."""
+    monkeypatch.setattr(settings, "auth_rate_limit_per_minute", 3)
+    monkeypatch.setattr(settings, "trust_proxy_headers", True)
+
+    # the caller forges the left-hand entries; the proxy appended 10.0.0.1 itself
+    codes = [
+        (
+            await client.post(
+                "/api/v1/auth/verify/resend",
+                json={"email": "nobody@example.com"},
+                headers={"X-Forwarded-For": f"203.0.113.{index}, 10.0.0.1"},
+            )
+        ).status_code
+        for index in range(1, 7)
+    ]
+    assert 429 in codes, codes

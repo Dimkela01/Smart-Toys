@@ -6,6 +6,7 @@ exists, so the API cannot be used to find out who has an account (UC-01 alternat
 
 from __future__ import annotations
 
+import secrets
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -114,8 +115,12 @@ async def verify_email(
     if not parent.is_verified:
         await auth_service.mark_email_verified(session, parent)
 
-    # sign the parent in on this device, so the flow continues straight to the PIN screen
-    device_id = f"verify-{parent.id.hex[:12]}"
+    # Sign the parent in on this device, so the flow continues straight to the PIN screen.
+    # The device id has to come from the client: deriving it from the account made every
+    # browser that opened a verification link look like the same device, so a second one
+    # revoked the first's refresh token - and the first then tripped the replay check and
+    # dropped itself - while entering child mode on one phone locked the other.
+    device_id = payload.device_id or f"verify-{secrets.token_urlsafe(9)}"
     access, refresh = await auth_service.issue_session(session, parent=parent, device_id=device_id)
     _set_refresh_cookie(response, refresh)
     return _session_response(parent, access)
@@ -167,7 +172,28 @@ async def refresh_session(request: Request, session: SessionDep, response: Respo
         raise api_error(401, "invalid_refresh_token", "Sign in again to continue.")
 
     if row.revoked_at is not None:
-        # a revoked token being replayed means it leaked: drop the whole device
+        age = (datetime.now(UTC) - row.revoked_at).total_seconds()
+        successor = await auth_service.active_device_token(
+            session, parent_id=row.user_id, device_id=row.device_id
+        )
+        if age <= settings.refresh_reuse_grace_seconds and successor is not None:
+            # Not a leak but a race: two tabs opening at once both send the cookie the
+            # browser had, and only one of them can be the first to rotate it. Treating
+            # that as a replay signed the parent out of their own account, on the device
+            # they were sitting in front of. The loser gets an access token and no new
+            # cookie, because the browser already holds the successor's.
+            parent = await auth_service.get_parent(session, row.user_id)
+            if parent is None:
+                _clear_refresh_cookie(response)
+                raise api_error(401, "invalid_refresh_token", "Sign in again to continue.")
+            if successor.child_mode_at is not None:
+                raise api_error(403, "child_mode_active", "Child mode is on. The parent PIN unlocks it.")
+            access = tokens.access_token(
+                parent_id=parent.id, token_version=parent.token_version, device_id=row.device_id
+            )
+            return _session_response(parent, access)
+
+        # a revoked token replayed later than that really did leak: drop the whole device
         await auth_service.revoke_device_tokens(session, parent_id=row.user_id, device_id=row.device_id)
         _clear_refresh_cookie(response)
         raise api_error(401, "refresh_token_reused", "Sign in again to continue.")
@@ -250,17 +276,36 @@ async def set_pin(
 ) -> MeResponse:
     """Set or change the 4-digit parent PIN, entered twice (UC-01 step 5).
 
-    Changing an existing PIN requires the current one, so an unattended parent session
-    cannot be used to lock the real parent out of child mode.
+    Changing an existing PIN takes either the current PIN or the account password, so an
+    unattended parent session cannot be used to lock the real parent out of child mode.
+    The password is the way back for a parent who has forgotten the PIN, which UC-21 AC
+    asks for ("reset only from the parent login"); requiring the current PIN alone left a
+    forgotten PIN unresettable for good.
     """
     parent = principal.parent
     if parent.has_pin:
-        await _guard_pin_lock(parent)
-        if payload.current_pin is None:
-            raise api_error(400, "current_pin_required", "Enter your current PIN to change it.")
-        if not await auth_service.check_pin(parent, payload.current_pin):
-            await register_failure(PIN, str(parent.id))
-            raise api_error(401, "invalid_pin", "That PIN is not correct.")
+        if payload.password is not None:
+            # the password is checked against the login lockout, not the PIN one
+            locked_for = await seconds_remaining(LOGIN, parent.email)
+            if locked_for > 0:
+                raise api_error(
+                    423,
+                    "account_locked",
+                    f"Too many attempts. Try again in {max(locked_for // 60, 1)} minutes.",
+                )
+            if not await auth_service.check_password(parent, payload.password):
+                await register_failure(LOGIN, parent.email)
+                raise api_error(401, "invalid_credentials", "Wrong email address or password.")
+            await reset(LOGIN, parent.email)
+        elif payload.current_pin is not None:
+            await _guard_pin_lock(parent)
+            if not await auth_service.check_pin(parent, payload.current_pin):
+                await register_failure(PIN, str(parent.id))
+                raise api_error(401, "invalid_pin", "That PIN is not correct.")
+        else:
+            raise api_error(
+                400, "current_pin_required", "Enter your current PIN, or your password, to change it."
+            )
 
     await auth_service.set_pin(session, parent=parent, pin=payload.pin)
     await reset(PIN, str(parent.id))

@@ -56,6 +56,9 @@ class GenericStatus(BaseModel):
 
 class VerifyEmailRequest(BaseModel):
     token: str = Field(min_length=10)
+    #: Which device is being signed in. Without it every browser that follows a link shares
+    #: one device identity, and devices then revoke each other's sessions (ARCHITECTURE.md §9).
+    device_id: DeviceId | None = None
 
 
 class ResendVerificationRequest(BaseModel):
@@ -108,8 +111,12 @@ class SetPinRequest(BaseModel):
 
     pin: Pin
     pin_repeat: Pin
-    #: required only when a PIN already exists, so a left-open session cannot change it
+    #: Changing an existing PIN needs proof, so a session left open cannot lock the real
+    #: parent out of child mode. Either proof will do: the current PIN, or - for a parent
+    #: who has forgotten it - the account password, which is UC-21 AC's "reset only from
+    #: the parent login".
     current_pin: Pin | None = None
+    password: Password | None = None
 
     @model_validator(mode="after")
     def _must_match(self) -> SetPinRequest:

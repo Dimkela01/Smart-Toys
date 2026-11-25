@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     consent_version: str = "2026-11-11"
     #: the refresh cookie needs Secure behind TLS; off for plain-http development
     cookie_secure: bool = False
+    #: A refresh token is single use and a replay revokes the device. Two browser tabs
+    #: loading at once both present the same cookie, though, and that race is not a leak:
+    #: inside this window a replay is answered with a fresh access token and no rotation.
+    refresh_reuse_grace_seconds: int = 10
     #: Fernet key for admins.totp_secret_enc; derived from JWT_SECRET when empty (dev only)
     totp_encryption_key: str = ""
 
@@ -63,6 +67,11 @@ class Settings(BaseSettings):
     pin_max_attempts: int = 5
     pin_lock_minutes: int = 5
     auth_rate_limit_per_minute: int = 10
+    #: Only true when a reverse proxy we control (Caddy) sets X-Forwarded-For from the
+    #: socket. Anything else can forge the header, and NFR-06's per-IP limit would then be
+    #: one header away from unlimited. Next.js passes the client's value through unchanged,
+    #: so development leaves this off and buckets by the connecting address.
+    trust_proxy_headers: bool = False
     #: PIN attempts get a separate, roomier bucket: the 5-attempt lock (UC-21) is the real
     #: control, and sharing the auth bucket would answer 429 before the specified 423
     pin_rate_limit_per_minute: int = 20

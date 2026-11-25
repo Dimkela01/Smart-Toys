@@ -19,10 +19,22 @@ logger = logging.getLogger("app.ratelimit")
 
 
 def client_ip(request: Request) -> str:
-    """Caller address. Behind Caddy the first X-Forwarded-For entry is the real client."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """Caller address, as far as it can be trusted.
+
+    X-Forwarded-For is a client-supplied header unless a proxy we control overwrites it, so
+    it is only read when `TRUST_PROXY_HEADERS` says there is such a proxy in front. Then the
+    **last** entry is used: each hop appends the address it saw, so the rightmost one was
+    written by our own proxy, while anything further left may have been sent by the caller.
+
+    Reading the leftmost entry instead let anyone past the NFR-06 limit by sending a
+    different X-Forwarded-For on every request.
+    """
+    if settings.trust_proxy_headers:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
+            if hops:
+                return hops[-1]
     return request.client.host if request.client else "unknown"
 
 

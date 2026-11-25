@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { Button, Field, Input, Notice, Page, Spinner } from '@/components/ui';
 import { request, type SessionResponse } from '@/lib/api';
+import { deviceId } from '@/lib/device';
 import { useT } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 
@@ -33,7 +34,8 @@ function Verify(): ReactNode {
       try {
         const session = await request<SessionResponse>('/auth/verify', {
           method: 'POST',
-          body: { token },
+          // without this every browser that opens a link looks like the same device
+          body: { token, device_id: deviceId() },
         });
         if (cancelled) return;
         adopt(session);
