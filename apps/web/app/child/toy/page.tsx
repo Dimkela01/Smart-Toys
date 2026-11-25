@@ -198,7 +198,9 @@ export default function ToyScreen(): ReactNode {
           className="absolute top-0 left-0 h-16 w-16 opacity-0"
         />
 
-        <div className="flex flex-1 items-center justify-center">
+        {/* min-h-0 lets this shrink; without it the character keeps its height and the
+            paw is pushed outside the fixed, non-scrolling screen in landscape */}
+        <div className="flex w-full min-h-0 flex-1 items-center justify-center px-4">
           <Character characterId={child.character_id} state={state} label={child.nickname} />
         </div>
 
@@ -218,7 +220,7 @@ export default function ToyScreen(): ReactNode {
           ))}
         </div>
 
-        <div className="pt-4 pb-2">
+        <div className="pt-4 pb-4">
           <PawButton
             label={t('child.pawLabel')}
             // the paw wins over a celebration still in progress

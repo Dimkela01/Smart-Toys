@@ -162,7 +162,9 @@
     "exitTitle": "Unesite PIN",
     "exitWrong": "PIN nije tačan.",
     "exitLocked": "Previše pokušaja. Probajte za 5 minuta.",
-    "voiceSoon": "Glas se uključuje u sledećem koraku."
+    "voiceSoon": "Glas se uključuje u sledećem koraku.",
+    "lockedTitle": "Dečji režim je uključen",
+    "lockedText": "Ovaj uređaj je zaključan. Vratite se u karticu sa Brunom i izađite dugim pritiskom na gornji levi ugao, pa unesite PIN."
   },
   "copy": {
     "greet": "Zdravo, {name}! Hoćeš da pričamo, da ti ispričam priču ili da se igramo?",

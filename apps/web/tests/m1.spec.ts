@@ -151,6 +151,25 @@ test.describe('M1 run-through', () => {
       await expect(page.locator('.character--idle')).toBeVisible({ timeout: 5000 });
     });
 
+    await test.step('the paw stays on screen in landscape', async () => {
+      // the toy screen is fixed and never scrolls, so anything that does not fit is simply
+      // unreachable: in landscape the paw was pushed off the bottom and disappeared
+      await page.setViewportSize({ width: 740, height: 360 });
+      await page.waitForTimeout(300);
+
+      const paw = page.getByRole('button', { name: 'Drži šapu i govori' });
+      await expect(paw).toBeVisible();
+      const box = await paw.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.y + box!.height).toBeLessThanOrEqual(360);
+      expect(box!.height).toBeGreaterThanOrEqual(96);
+      await expect(page.getByRole('button', { name: 'Brojevi' })).toBeVisible();
+
+      await page.setViewportSize({ width: 360, height: 740 });
+      await page.waitForTimeout(300);
+      await expect(paw).toBeVisible();
+    });
+
     await test.step('child mode is locked: back does not leave it', async () => {
       await page.goBack();
       await page.waitForTimeout(300);
@@ -196,6 +215,34 @@ test.describe('M1 run-through', () => {
     await page.getByRole('button', { name: 'Prijavi se' }).click();
     await page.waitForURL('**/dashboard');
     await expect(page.getByRole('heading', { name: 'Vaša deca' })).toBeVisible();
+  });
+
+  test('a second tab explains the lock instead of looping between screens', async ({
+    context,
+  }) => {
+    const page = await context.newPage();
+    const address = uniqueEmail();
+    await registerAndVerify(page, address);
+    await setPin(page);
+    await addChild(page, 'Mina', 'Sova');
+    await page.getByRole('button', { name: 'Daj detetu' }).click();
+    await page.waitForURL('**/child');
+
+    // a new tab shares the cookies but not sessionStorage, so it has no child-mode token
+    const second = await context.newPage();
+    const failures: string[] = [];
+    second.on('pageerror', (error) => failures.push(error.message));
+
+    await second.goto('/dashboard');
+    await second.waitForTimeout(2500);
+
+    await expect(second.getByRole('heading', { name: 'Dečji režim je uključen' })).toBeVisible();
+    expect(failures).toEqual([]);
+    // and it must not have handed a parent session to the new tab
+    await expect(second.getByRole('heading', { name: 'Vaša deca' })).toBeHidden();
+
+    await second.close();
+    await page.close();
   });
 
   test('a wrong password is refused and the message does not say which part was wrong', async ({

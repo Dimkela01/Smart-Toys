@@ -98,9 +98,15 @@ export function Character({
       </svg>
 
       <style jsx>{`
+        /*
+         * Fills whatever space the toy screen gives it and no more. The SVG viewBox keeps
+         * the proportions, so a short landscape window shrinks the character instead of
+         * pushing the paw off the bottom.
+         */
         .character {
-          width: min(60vw, 60vh);
-          height: min(60vw, 60vh);
+          width: 100%;
+          height: 100%;
+          max-width: min(60vh, 90vw);
         }
         /* calm movement only, no flashing (UI.md §4) */
         .character--idle,

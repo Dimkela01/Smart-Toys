@@ -162,7 +162,9 @@
     "exitTitle": "Enter the PIN",
     "exitWrong": "That PIN is not correct.",
     "exitLocked": "Too many attempts. Try again in 5 minutes.",
-    "voiceSoon": "The voice is switched on in the next step."
+    "voiceSoon": "The voice is switched on in the next step.",
+    "lockedTitle": "Child mode is on",
+    "lockedText": "This device is locked. Go back to the Bruno tab and leave child mode with a long press on the top-left corner, then your PIN."
   },
   "copy": {
     "greet": "Hi, {name}! Want to talk, hear a story or play a game?",

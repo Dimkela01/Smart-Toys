@@ -27,13 +27,22 @@ import {
   setChildSession,
   storedPictures,
 } from '@/lib/childSession';
+import { useT } from '@/lib/i18n';
 import { useLockedScreen } from '@/lib/useLockedScreen';
 
 export default function ChildPickerPage(): ReactNode {
   const router = useRouter();
+  const t = useT();
   const [children, setChildren] = useState<ChildPicker[] | null>(null);
   const [labels, setLabels] = useState<Record<string, AvatarEntry>>({});
   const [busy, setBusy] = useState(false);
+  /**
+   * A second tab has its own sessionStorage, so it has no child-mode token even though
+   * the device is locked. It must explain that instead of redirecting: bouncing back to
+   * the landing page sent the two screens into an endless redirect loop, which iOS Safari
+   * turns into "a client-side exception has occurred".
+   */
+  const [locked, setLocked] = useState(false);
 
   useLockedScreen();
 
@@ -43,17 +52,13 @@ export default function ChildPickerPage(): ReactNode {
   }, [router]);
 
   useEffect(() => {
-    if (!childModeToken()) {
-      leave();
-      return;
-    }
     const pictures = storedPictures();
-    if (pictures === null || pictures.length === 0) {
-      leave();
+    if (!childModeToken() || pictures === null || pictures.length === 0) {
+      setLocked(true);
       return;
     }
     setChildren(pictures);
-  }, [leave]);
+  }, []);
 
   // the catalog is only needed for the screen-reader labels
   useEffect(() => {
@@ -90,6 +95,17 @@ export default function ChildPickerPage(): ReactNode {
       setBusy(false);
       leave();
     }
+  }
+
+  if (locked) {
+    return (
+      <div className="child-screen grid place-items-center p-6">
+        <div className="max-w-xs rounded-2xl bg-white/90 p-5 text-center">
+          <h1 className="text-lg font-semibold">{t('child.lockedTitle')}</h1>
+          <p className="mt-2 text-sm text-[var(--color-parent-muted)]">{t('child.lockedText')}</p>
+        </div>
+      </div>
+    );
   }
 
   return (

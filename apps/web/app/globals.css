@@ -40,11 +40,25 @@ body {
   outline-offset: 2px;
 }
 
+/* Nothing inside an icon is selectable or draggable: a drag over the activity cards
+   used to leave the letters highlighted in blue */
+.child-screen svg,
+.child-screen svg text {
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
+}
+
 /* The child screen never scrolls and has nothing to select or drag (NFR-07) */
 .child-screen {
   position: fixed;
   inset: 0;
   overflow: hidden;
+  /* keep the paw and the exit corner clear of the notch, the home indicator and
+     Safari's toolbars, in both orientations */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  box-sizing: border-box;
   background: linear-gradient(180deg, var(--color-child-sky) 0%, var(--color-child-bg) 55%);
   touch-action: manipulation;
   user-select: none;
