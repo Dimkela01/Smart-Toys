@@ -50,7 +50,12 @@ def test_qwen_thinking_is_disabled(registry: dict[str, Any]) -> None:
 
 
 def test_the_serbian_voice_stays_internal_only(registry: dict[str, Any]) -> None:
-    """Its licence is unconfirmed, so it must never reach a public demo (docs/CLAUDE.md §3)."""
+    """It is non-commercial, so it must never reach a public demo (docs/CLAUDE.md §3).
+
+    The licence is no longer merely unconfirmed: the voice's own MODEL_CARD puts its
+    dataset under CC BY-NC-SA 4.0, so internal_only is permanent for this entry rather
+    than a holding position.
+    """
     serbian = [voice for voice in registry["tts"] if voice.get("language") == "sr"]
     assert serbian, "no Serbian voice in the registry"
     assert all(voice["internal_only"] is True for voice in serbian)

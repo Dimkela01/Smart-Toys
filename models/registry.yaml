@@ -108,12 +108,21 @@ tts:
   - id: piper-sr-placeholder
     runtime: piper
     language: sr
-    # Checked 2026-11-25: this is the only sr voice in piper-voices, and its dataset
-    # (https://github.com/marytts/serbski-institut-dsb-data) is CC BY-NC-SA 4.0, so it
-    # may never be used commercially - not "until confirmed" but at all. Worse, `dsb` is
-    # Lower Sorbian and "Serbski institut" is the Sorbian Institute, so the voice is
-    # probably not Serbian despite the sr_RS label. Samples are downloaded for a
-    # native speaker to judge. A real Serbian voice is an open question for M2.
+    # Checked 2026-11-25: the only sr voice in piper-voices, and unusable for the product.
+    #
+    # Licence: its dataset (https://github.com/marytts/serbski-institut-dsb-data) is
+    # CC BY-NC-SA 4.0, as its own MODEL_CARD states, so this voice may never be used
+    # commercially - not "until confirmed" (docs/CLAUDE.md §3) but at all. Keep it
+    # internal_only and off any public URL.
+    #
+    # Quality: a native Serbian speaker judged the samples - the speech is Serbian, but
+    # the pronunciation is bad. That matches how it was built: the text -> phoneme stage
+    # is eSpeak NG's Serbian (onnx.json: espeak.voice = sr), which is why it reads as
+    # Serbian, while the phoneme -> audio stage was trained on the Sorbian Institute's
+    # `dsb` recordings and finetuned from a U.S. English voice, which is where the
+    # accent and prosody come from.
+    #
+    # A Serbian voice we own is an open question; see docs/reports/M2.md.
     license: cc-by-nc-sa-4.0
     internal_only: true
     source:
