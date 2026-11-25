@@ -8,16 +8,20 @@ The specification in [`docs/`](docs/) is the source of truth — start with
 [`docs/CLAUDE.md`](docs/CLAUDE.md) and [`docs/SPEC.md`](docs/SPEC.md). Work follows the
 milestone order in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 
-**Status: M1 "Skeleton" nearly complete.** Parent accounts, the parent PIN, child profiles,
-child mode and the admin sign-in work end to end, with the web app on top: landing,
-registration and consent, email verification, PIN, dashboard, add-child wizard, the child
-picture picker and a placeholder toy screen. There is no voice yet — that is M2.
+**Status: M1 "Skeleton" done, M2 "Voice loop" in progress.** Parent accounts, the parent
+PIN, child profiles, child mode and the admin sign-in work end to end, with the web app on
+top: landing, registration and consent, email verification, PIN, dashboard, add-child
+wizard, the child picture picker and a placeholder toy screen. M2 adds the voice: the model
+weights, an https front door so a phone may use its microphone, and the three local
+inference services. See [`docs/reports/`](docs/reports/) for the milestone reports.
 
 ## Requirements
 
 - Docker Desktop (the stack runs in containers)
 - [uv](https://docs.astral.sh/uv/) for the backend, [pnpm](https://pnpm.io/) for the web app
-- No GPU and no model weights are needed for M1
+- About 2 GB of disk for the model weights (`make models`), and no GPU: every model runs
+  on the CPU. `make dev-lite` skips the inference services if you are only working on the
+  parent or admin side.
 
 ## Setup
 
@@ -56,11 +60,24 @@ Set a real `JWT_SECRET` in `.env` before anything leaves your machine
 | `postgres` | Postgres 16 | `POSTGRES_PORT` |
 | `redis` | login/PIN lockout counters, rate limits | `REDIS_PORT` |
 | `mailpit` | catches verification, reset and alert email in development | `MAILPIT_UI_PORT` |
-| `web` | Next.js app (parent, child, admin) — arrives in a later M1 step | `WEB_PORT` |
+| `web` | Next.js app (parent, child, admin) | `WEB_PORT` |
+| `llm` | llama.cpp serving the model the registry marks active | `LLM_PORT` |
+| `stt` | faster-whisper, int8 on CPU | `STT_PORT` |
+| `tts` | Kokoro (English) and a placeholder Piper voice (Serbian) | `TTS_PORT` |
 
-The LLM, speech-to-text and text-to-speech services join the stack in M2; they run locally
-via llama.cpp, faster-whisper, Kokoro and Piper. **No external AI API is ever called**
-(`docs/CLAUDE.md` §2).
+The three inference services run locally via llama.cpp, faster-whisper, Kokoro and Piper.
+**No external AI API is ever called** (`docs/CLAUDE.md` §2), and the images run with
+`HF_HUB_OFFLINE=1` so a missing weight fails loudly instead of being fetched at runtime.
+None of them has a model name in its Dockerfile or compose command: each resolves its own
+weights through `models/registry.yaml`, so changing model is a registry edit and a restart.
+
+The published `LLM_PORT`/`STT_PORT`/`TTS_PORT` are for smoke tests from the host only —
+the app reaches these services inside the compose network.
+
+**Serbian has no voice we can ship.** The only Serbian Piper voice is non-commercial and
+mispronounces the language, so the registry marks it `internal_only` and `tts` refuses to
+load it unless `TTS_ALLOW_INTERNAL_ONLY` is set. Speech *recognition* in Serbian is
+unaffected. See `docs/reports/M2.md`.
 
 ## Checks that matter
 

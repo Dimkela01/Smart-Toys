@@ -1,0 +1,7 @@
+# Floors, matching services/api/pyproject.toml's convention. These images are rebuilt
+# rarely, so `docker compose build --no-cache stt` is what picks up new releases.
+faster-whisper>=1.2.1
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+numpy>=2.2.0
+PyYAML>=6.0.2

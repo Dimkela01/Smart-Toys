@@ -1,0 +1,10 @@
+# Floors, matching services/api/pyproject.toml's convention.
+# torch comes from PyTorch's CPU index (see the Dockerfile) - the default wheel pulls
+# CUDA, which is useless here and adds gigabytes.
+kokoro>=0.9.4
+# GPL-3.0-or-later; used only for the Serbian placeholder voice (see app.py)
+piper-tts>=1.8.0
+soundfile>=0.12.1
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+PyYAML>=6.0.2

@@ -1,0 +1,19 @@
+# The inference images each have their own pip environment, so they are not part of
+# services/api's uv project; ruff therefore needs its own config here. Settings mirror
+# services/api/pyproject.toml so both halves of the backend read the same way.
+#
+# mypy is deliberately not run over this directory: it would need torch, kokoro,
+# faster-whisper and piper installed on the host to say anything true, and those live
+# only inside the images. The files here are small and have no business logic - the
+# orchestrator in services/api is where the typed code is.
+line-length = 110
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF", "ASYNC"]
+ignore = [
+    "B008",   # FastAPI Query()/Depends() in defaults is the documented pattern
+    "RUF001", # the spec and the Serbian copy legitimately use en dashes and diacritics
+    "RUF002",
+    "RUF003",
+]

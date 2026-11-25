@@ -1,6 +1,10 @@
-# M1 stack: web, api, postgres, redis, mailpit (docs/MILESTONES.md M1).
-# llm / stt / tts / jobs / caddy arrive with later milestones (ARCHITECTURE.md §10).
+# web, api, postgres, redis, mailpit, and from M2 the three inference services
+# (docs/MILESTONES.md M1-M2). jobs arrives with M5 (ARCHITECTURE.md §10).
 # All images are multi-arch (arm64 + amd64).
+#
+# The inference services mount models/ read-only and resolve their own weights through
+# models/registry.yaml, so no model file name appears in this file (docs/CLAUDE.md §3).
+# They need `make models` to have run; `make dev` starts them, `make dev-lite` does not.
 name: bruno
 
 services:
@@ -107,6 +111,77 @@ services:
       - web_next:/srv/web/.next
     # node_modules is a named volume (empty on first run), so install before starting
     command: ["sh", "-c", "pnpm install --prefer-offline && pnpm dev"]
+
+  # llama.cpp server: the LLM the registry marks active (ARCHITECTURE.md §6.3).
+  llm:
+    build:
+      # the context is services/inference so the image can copy common/ as well
+      context: ./services/inference
+      dockerfile: llm/Dockerfile
+    restart: unless-stopped
+    environment:
+      MODEL_ROOT: /srv/models
+      # empty means "use the registry's own `default`"
+      LLM_MODEL_ID: ${LLM_MODEL_ID:-}
+      LLM_PARALLEL: ${LLM_PARALLEL:-2}
+      # one thread per physical core; Docker on macOS sees the VM's CPUs
+      LLM_THREADS: ${LLM_THREADS:-}
+    volumes:
+      - ./models:/srv/models:ro
+    ports:
+      - "${LLM_PORT:-8090}:8080"
+    healthcheck:
+      # /health reports 503 until the model is loaded, which takes a few seconds on CPU
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # faster-whisper, int8 on CPU (ARCHITECTURE.md §6.2). Audio is never stored.
+  stt:
+    build:
+      context: ./services/inference
+      dockerfile: stt/Dockerfile
+    restart: unless-stopped
+    environment:
+      MODEL_ROOT: /srv/models
+      STT_MODEL_ID: ${STT_MODEL_ID:-}
+      STT_THREADS: ${STT_THREADS:-}
+    volumes:
+      - ./models:/srv/models:ro
+    ports:
+      - "${STT_PORT:-8091}:8001"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # Kokoro (en) and the Piper placeholder (sr) behind one interface (§6.4).
+  tts:
+    build:
+      context: ./services/inference
+      dockerfile: tts/Dockerfile
+    restart: unless-stopped
+    environment:
+      MODEL_ROOT: /srv/models
+      TTS_EN_VOICE: ${TTS_EN_VOICE:-af_heart}
+      # The only sr voice available is non-commercial and marked internal_only in the
+      # registry. Development on the LAN may use it; a deployment that does not set this
+      # loses the Serbian voice rather than publishing it (docs/CLAUDE.md §3).
+      TTS_ALLOW_INTERNAL_ONLY: ${TTS_ALLOW_INTERNAL_ONLY:-true}
+    volumes:
+      - ./models:/srv/models:ro
+    ports:
+      - "${TTS_PORT:-8092}:8002"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8002/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
 
   # HTTPS for device testing (M2). Started only by `make https`, so `make dev` is
   # unchanged and nothing binds 443 unless it is asked for.

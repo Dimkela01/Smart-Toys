@@ -13,4 +13,4 @@ Then read the other documents in `docs/` as the task needs them.
 contradictory, stop and ask. Work one milestone at a time and wait for approval between
 milestones (`docs/CLAUDE.md` §1).
 
-Current milestone: **M1 Skeleton**. See [`docs/reports/`](docs/reports/) for milestone reports.
+Current milestone: **M2 Voice loop** (M1 is signed off). See [`docs/reports/`](docs/reports/) for milestone reports.

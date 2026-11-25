@@ -11,7 +11,7 @@ API := $(COMPOSE) exec -T api
 CADDY_ROOT := /data/caddy/pki/authorities/local/root.crt
 API_RUN := $(COMPOSE) run --rm -T api
 
-.PHONY: help install dev up down logs ps migrate revision seed test test-api test-e2e lint fmt models clean phone https https-stop
+.PHONY: help install dev dev-lite up down logs ps migrate revision seed test test-api test-e2e lint fmt models clean phone https https-stop
 
 help: ## show this help
 	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -23,12 +23,28 @@ install: .env ## install local (non-docker) dev dependencies
 	cd services/api && uv sync
 	@if [ -f apps/web/package.json ]; then cd apps/web && pnpm install; else echo "skip: apps/web not set up yet"; fi
 
-dev: .env ## start the stack (web, api, postgres, redis, mailpit) and apply migrations
-	@if [ -f apps/web/Dockerfile ]; then $(COMPOSE) up --build -d --wait; else echo "note: apps/web does not exist yet (M1 step 3); starting backend services only"; $(COMPOSE) up --build -d --wait postgres redis mailpit api; fi
+# services that need no model weights, so `make dev-lite` can skip the inference images
+LITE := postgres redis mailpit api web
+
+dev: .env ## start the whole stack, inference services included, and apply migrations
+	@test -n "$$(ls models/weights/models/*/*.gguf 2>/dev/null)" || { \
+	  echo; \
+	  echo "  No model weights found. The llm/stt/tts services cannot start without them."; \
+	  echo "  Run 'make models' first, or 'make dev-lite' to start everything else."; \
+	  echo; exit 1; }
+	$(COMPOSE) up --build -d --wait
 	$(MAKE) migrate
 	@echo
 	@echo "  ports are set in .env (API_PORT, WEB_PORT, MAILPIT_UI_PORT):"
 	@grep -E '^(API_PORT|WEB_PORT|MAILPIT_UI_PORT|POSTGRES_PORT)=' .env | sed 's/^/    /'
+	@echo
+
+dev-lite: .env ## start everything except llm/stt/tts (no model weights needed)
+	$(COMPOSE) up --build -d --wait $(LITE)
+	$(MAKE) migrate
+	@echo
+	@echo "  The three inference services are not running, so the paw has no voice."
+	@echo "  Use 'make dev' once 'make models' has downloaded the weights."
 	@echo
 
 up: dev ## alias for dev
@@ -120,10 +136,14 @@ test-e2e: .env ## Playwright end-to-end run-through (starts the stack with test 
 
 lint: ## ruff + mypy + eslint + tsc
 	cd services/api && uv run ruff check . && uv run ruff format --check . && uv run mypy .
+	# the inference images have their own pip environments, so only ruff runs over them
+	# (see services/inference/ruff.toml)
+	cd services/api && uv run ruff check ../inference && uv run ruff format --check ../inference
 	@if [ -f apps/web/package.json ]; then cd apps/web && pnpm install --prefer-offline --silent && pnpm run lint && pnpm exec tsc --noEmit; else echo "skip: apps/web not set up yet"; fi
 
 fmt: ## format backend and frontend
 	cd services/api && uv run ruff format . && uv run ruff check --fix .
+	cd services/api && uv run ruff format ../inference && uv run ruff check --fix ../inference
 	@if [ -f apps/web/package.json ]; then cd apps/web && pnpm exec prettier --write .; else echo "skip: apps/web not set up yet"; fi
 
 models: .env ## download model weights listed in models/registry.yaml (not needed for M1)
