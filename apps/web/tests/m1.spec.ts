@@ -217,7 +217,7 @@ test.describe('M1 run-through', () => {
     await expect(page.getByRole('heading', { name: 'Vaša deca' })).toBeVisible();
   });
 
-  test('a second tab explains the lock instead of looping between screens', async ({
+  test('a second tab explains the lock and the PIN still gets the parent out', async ({
     context,
   }) => {
     const page = await context.newPage();
@@ -240,6 +240,21 @@ test.describe('M1 run-through', () => {
     expect(failures).toEqual([]);
     // and it must not have handed a parent session to the new tab
     await expect(second.getByRole('heading', { name: 'Vaša deca' })).toBeHidden();
+
+    // the explanation must not be a dead end: /child-mode/exit needs the token this tab
+    // never had, so without /auth/unlock the parent could never use this device again
+    await second.getByRole('button', { name: 'Unesite PIN' }).click();
+    await expect(second.getByRole('heading', { name: 'Unesite PIN' })).toBeVisible();
+    for (const digit of ['0', '0', '0', '0']) {
+      await second.getByRole('button', { name: digit, exact: true }).click();
+    }
+    await expect(second.getByText('PIN nije tačan.')).toBeVisible();
+
+    for (const digit of PIN.split('')) {
+      await second.getByRole('button', { name: digit, exact: true }).click();
+    }
+    await second.waitForURL('**/dashboard');
+    await expect(second.getByRole('heading', { name: 'Vaša deca' })).toBeVisible();
 
     await second.close();
     await page.close();

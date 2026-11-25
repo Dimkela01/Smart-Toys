@@ -31,6 +31,7 @@ from app.schemas.auth import (
 from app.security import tokens
 from app.security.lockout import LOGIN, PIN, register_failure, reset, seconds_remaining
 from app.security.ratelimit import RateLimit
+from app.services import audit
 from app.services import auth as auth_service
 from app.services import email as email_service
 
@@ -280,6 +281,50 @@ async def verify_pin(payload: VerifyPinRequest, principal: ParentDep, session: S
 
     await reset(PIN, str(parent.id))
     return GenericStatus(status="pin_ok")
+
+
+@pin_router.post("/unlock", response_model=GenericStatus)
+async def unlock_device(
+    payload: VerifyPinRequest, request: Request, session: SessionDep, response: Response
+) -> GenericStatus:
+    """Leave child mode with the PIN when the device's child token is gone (UC-21).
+
+    The toy screen's corner gesture uses /child-mode/exit, which needs the child-mode token
+    kept in the browser's sessionStorage. A browser that dropped it - a new tab, a reopened
+    Safari, a restored session - would leave the device locked for ever: /auth/refresh
+    answers child_mode_active, and nothing else can clear the flag. The refresh cookie names
+    the parent and the device, the PIN is the parent's proof, and UC-21 asks for nothing
+    more, so this is the same exit by a different door. Same PIN lockout, same bucket.
+
+    Lives under /auth because the refresh cookie's path is /api/v1/auth.
+    """
+    presented = request.cookies.get(REFRESH_COOKIE)
+    if not presented:
+        raise api_error(401, "not_authenticated", "Sign in to continue.")
+
+    row = await auth_service.find_refresh_token(session, presented)
+    if row is None or row.revoked_at is not None or row.expires_at <= datetime.now(UTC):
+        _clear_refresh_cookie(response)
+        raise api_error(401, "invalid_refresh_token", "Sign in again to continue.")
+
+    parent = await auth_service.get_parent(session, row.user_id)
+    if parent is None:
+        _clear_refresh_cookie(response)
+        raise api_error(401, "invalid_refresh_token", "Sign in again to continue.")
+    if not parent.has_pin:
+        # nothing to unlock with; the device cannot have been locked without a PIN either
+        raise api_error(400, "pin_not_set", "Set your parent PIN first.")
+
+    await _guard_pin_lock(parent)
+    if not await auth_service.check_pin(parent, payload.pin):
+        await register_failure(PIN, str(parent.id))
+        raise api_error(401, "invalid_pin", "That PIN is not correct.")
+
+    await reset(PIN, str(parent.id))
+    await auth_service.leave_child_mode(session, parent_id=parent.id, device_id=row.device_id)
+    await audit.record(session, actor_type="parent", actor_id=parent.id, action="child_mode.exited")
+    # the web app now calls /auth/refresh, which hands the parent session back
+    return GenericStatus(status="unlocked")
 
 
 @router.get("/me", response_model=MeResponse)

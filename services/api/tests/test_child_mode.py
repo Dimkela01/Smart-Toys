@@ -240,3 +240,80 @@ async def test_logging_out_ends_child_mode_on_that_device(
     )
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "child_mode_inactive"
+
+
+# --- getting out when the device dropped its child token (UC-21) -------------------------
+
+
+async def test_the_pin_unlocks_a_device_whose_child_token_is_gone(
+    client: AsyncClient, parent_headers: dict[str, str]
+) -> None:
+    """A browser that lost the child-mode token must not strand the parent for ever.
+
+    /child-mode/exit needs that token, so a new tab, a reopened browser or a restored
+    session could reach neither the toy screen nor the exit: /auth/refresh answered
+    child_mode_active and nothing could clear the flag. The PIN plus the refresh cookie is
+    the same proof UC-21 asks for.
+    """
+    await _family(client, parent_headers)
+    await _enter(client, parent_headers)  # the child-mode token is deliberately thrown away
+
+    assert (await client.post("/api/v1/auth/refresh")).status_code == 403
+
+    unlocked = await client.post("/api/v1/auth/unlock", json={"pin": DEFAULT_PIN})
+    assert unlocked.status_code == 200, unlocked.text
+    assert unlocked.json() == {"status": "unlocked"}
+
+    # the parent is back on this device
+    assert (await client.post("/api/v1/auth/refresh")).status_code == 200
+
+
+async def test_unlock_refuses_a_wrong_pin_and_keeps_the_device_locked(
+    client: AsyncClient, parent_headers: dict[str, str]
+) -> None:
+    await _family(client, parent_headers)
+    await _enter(client, parent_headers)
+
+    wrong = await client.post("/api/v1/auth/unlock", json={"pin": "0000"})
+    assert wrong.status_code == 401
+    assert wrong.json()["detail"]["code"] == "invalid_pin"
+    assert (await client.post("/api/v1/auth/refresh")).status_code == 403
+
+
+async def test_unlock_shares_the_pin_lockout_with_the_child_mode_exit(
+    client: AsyncClient, parent_headers: dict[str, str]
+) -> None:
+    """The second door must not multiply the number of guesses (UC-21 AC)."""
+    await _family(client, parent_headers)
+    entered = await _enter(client, parent_headers)
+
+    for _ in range(settings.pin_max_attempts):
+        wrong = await client.post(
+            f"{CHILD_MODE}/exit", json={"pin": "0000"}, headers=_bearer(entered["token"])
+        )
+        assert wrong.status_code == 401
+
+    locked = await client.post("/api/v1/auth/unlock", json={"pin": DEFAULT_PIN})
+    assert locked.status_code == 423
+    assert locked.json()["detail"]["code"] == "pin_locked"
+    assert (await client.post("/api/v1/auth/refresh")).status_code == 403
+
+
+async def test_unlock_needs_this_device_s_refresh_cookie(
+    client: AsyncClient, parent_headers: dict[str, str]
+) -> None:
+    """The PIN alone, from a device with no session of its own, unlocks nothing."""
+    await _family(client, parent_headers)
+    await _enter(client, parent_headers)
+
+    cookies = dict(client.cookies)
+    client.cookies.clear()
+    try:
+        response = await client.post("/api/v1/auth/unlock", json={"pin": DEFAULT_PIN})
+        assert response.status_code == 401
+        assert response.json()["detail"]["code"] == "not_authenticated"
+    finally:
+        for name, value in cookies.items():
+            client.cookies.set(name, value)
+
+    assert (await client.post("/api/v1/auth/refresh")).status_code == 403
