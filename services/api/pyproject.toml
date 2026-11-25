@@ -19,6 +19,9 @@ dependencies = [
     "pyotp>=2.9.0",
     "redis>=5.2.0",
     "pyyaml>=6.0.2",
+    # the inference clients (app/inference) talk to llm/stt/tts over HTTP, so httpx is a
+    # runtime dependency from M2 on, not only a test one
+    "httpx>=0.28.0",
 ]
 
 [dependency-groups]
@@ -27,7 +30,6 @@ dev = [
     "mypy>=1.13.0",
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
-    "httpx>=0.28.0",
     "types-pyyaml>=6.0.12",
 ]
 
