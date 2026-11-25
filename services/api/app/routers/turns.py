@@ -361,13 +361,17 @@ async def _run_turn(
         elif isinstance(event, turn.Failed):
             await channel.error(event.code)
             await channel.state(turn.STATE_IDLE)
-            running.stored = True
             await _store(session_id, child_id, context, event.metrics, None, None)
+            running.stored = True
             return
         elif isinstance(event, turn.Finished):
-            await channel.event({"type": "turn.done", "turn_id": turn_id})
-            await channel.state(turn.STATE_IDLE)
-            running.stored = True
+            # Store before announcing. The child has already heard the answer, so
+            # `turn.done` is only bookkeeping - but a client that closes the moment it
+            # hears it makes the receive loop cancel this task, and a cancelled task
+            # cannot finish a write. Announcing last means the row is already safe, and
+            # a cancellation during the write leaves `stored` false so the canceller
+            # records the turn instead. Found by running a real socket: every turn
+            # played correctly and `turns` stayed empty.
             await _store(
                 session_id,
                 child_id,
@@ -378,6 +382,9 @@ async def _run_turn(
                 model_id=event.model_id,
                 prompt_version=event.prompt_version,
             )
+            running.stored = True
+            await channel.event({"type": "turn.done", "turn_id": turn_id})
+            await channel.state(turn.STATE_IDLE)
             return
 
 

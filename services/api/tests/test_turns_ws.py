@@ -564,3 +564,28 @@ async def test_the_queue_reports_how_long_the_wait_was() -> None:
     free = turn.Slots(count=1, max_wait_s=1.0)
     async with free as waited_ms:
         assert waited_ms < 50
+
+
+async def test_a_client_that_closes_the_instant_it_hears_done_still_leaves_a_row(
+    client: AsyncClient,
+    parent_headers: dict[str, str],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The race a real socket found, with no `sleep` to hide it.
+
+    The script ends right after `turn.end`, so the disconnect arrives while the turn is
+    still running and the receive loop cancels it. Whatever the timing, the turn must
+    leave exactly one row: a complete one if it got that far, an interrupted one if not.
+    """
+    token = await _child_session(client, parent_headers)
+    await _drive(
+        [_message(type="turn.start"), _frame(1, ONE_SECOND), _message(type="turn.end")],
+        token,
+    )
+    async with session_factory() as session:
+        rows = (await session.execute(select(Turn))).scalars().all()
+        assert len(rows) == 1, "a turn must never vanish"
+        metrics = (await session.execute(select(TurnMetrics))).scalars().all()
+        assert len(metrics) == 1
+        # either it finished, or it was recorded as interrupted - never nothing
+        assert rows[0].bruno_text is not None or metrics[0].error_code == "interrupted"

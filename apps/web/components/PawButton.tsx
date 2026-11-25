@@ -4,8 +4,8 @@
  * Hold-to-talk paw (UI.md §3.2): at least 96 px, press and hold, release to send, and the
  * space bar does the same on a desktop.
  *
- * In M1 it only drives the character state. M2 adds AudioContext.resume() on press (iOS
- * needs the user gesture), the AudioWorklet capture and the WebSocket.
+ * `level` is the microphone RMS while the paw is held: it draws the ring around the paw
+ * (§6.1), which is the only feedback a child gets that they are being heard.
  */
 
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
@@ -15,11 +15,14 @@ export function PawButton({
   onPressStart,
   onPressEnd,
   disabled = false,
+  level = 0,
 }: {
   label: string;
   onPressStart: () => void;
   onPressEnd: () => void;
   disabled?: boolean;
+  /** Microphone RMS, 0 to about 0.3 in ordinary speech. */
+  level?: number;
 }): ReactNode {
   const held = useRef(false);
 
@@ -57,11 +60,16 @@ export function PawButton({
     };
   }, [start, end]);
 
+  // RMS is small and uneven, so it is scaled and clamped into a ring that reacts
+  // visibly to a quiet child without flapping at a loud one
+  const ring = Math.min(1, level * 6);
+
   return (
     <button
       type="button"
       aria-label={label}
       disabled={disabled}
+      style={{ ['--ring' as string]: ring.toFixed(3) }}
       onPointerDown={start}
       onPointerUp={end}
       onPointerCancel={end}
@@ -79,6 +87,7 @@ export function PawButton({
 
       <style jsx>{`
         .paw {
+          position: relative;
           width: 112px;
           height: 112px;
           min-width: 96px;
@@ -91,6 +100,20 @@ export function PawButton({
           place-items: center;
           touch-action: none;
           transition: transform 0.08s ease;
+        }
+        /* grows with the child's voice; transform only, so it never costs a layout */
+        .paw::before {
+          content: '';
+          position: absolute;
+          inset: -14px;
+          border-radius: 9999px;
+          border: 4px solid var(--color-paw);
+          opacity: calc(0.25 + var(--ring, 0) * 0.75);
+          transform: scale(calc(1 + var(--ring, 0) * 0.18));
+          transition:
+            transform 0.08s linear,
+            opacity 0.08s linear;
+          pointer-events: none;
         }
         .paw:active {
           transform: translateY(4px) scale(0.98);

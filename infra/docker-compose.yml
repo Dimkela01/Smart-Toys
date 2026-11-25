@@ -127,7 +127,9 @@ services:
       LLM_MODEL_ID: ${LLM_MODEL_ID:-}
       LLM_PARALLEL: ${LLM_PARALLEL:-2}
       # one thread per physical core; Docker on macOS sees the VM's CPUs
-      LLM_THREADS: ${LLM_THREADS:-}
+      # leave room for the voice: the two overlap, because a sentence is synthesized
+      # while the next one is still being generated
+      LLM_THREADS: ${LLM_THREADS:-10}
     volumes:
       - ./models:/srv/models:ro
     ports:
@@ -170,6 +172,9 @@ services:
     environment:
       MODEL_ROOT: /srv/models
       TTS_EN_VOICE: ${TTS_EN_VOICE:-af_heart}
+      # the English voice runs on torch, which otherwise takes every core and starves
+      # llama.cpp mid-answer; see services/inference/tts/app.py
+      TTS_THREADS: ${TTS_THREADS:-4}
       # The only sr voice available is non-commercial and marked internal_only in the
       # registry. Development on the LAN may use it; a deployment that does not set this
       # loses the Serbian voice rather than publishing it (docs/CLAUDE.md §3).

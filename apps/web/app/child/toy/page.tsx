@@ -1,14 +1,15 @@
 'use client';
 
 /**
- * Placeholder toy screen (F-05 groundwork, UI.md §3.2).
+ * The toy screen (F-05, UI.md §3.2).
  *
- * M1 shows the character with its seven states, the paw, the activity cards and the hidden
- * exit. There is no voice yet: pressing the paw moves the character between listening and
- * idle locally. M2 adds the audio capture, the WebSocket and the real turn pipeline.
+ * Hold the paw, speak, and Bruno answers by voice. The character's state comes from the
+ * server while a turn is running (UI.md §3.3) and its mouth from the audio actually
+ * playing; the ring around the paw comes from the microphone. Everything to do with
+ * audio lives in lib/audio - see useVoice.
  *
- * Nothing on this screen is text for the child (docs/CLAUDE.md §2): the only words belong
- * to the parent PIN pad.
+ * Nothing on this screen is text for the child (docs/CLAUDE.md §2): the only words
+ * belong to the parent PIN pad. A failure is heard, never shown (NFR-09, UC-22).
  */
 
 import { useRouter } from 'next/navigation';
@@ -17,6 +18,7 @@ import { Character, type CharacterState } from '@/components/Character';
 import { PawButton } from '@/components/PawButton';
 import { PinPad } from '@/components/PinPad';
 import { ApiError, request, type ChildToy } from '@/lib/api';
+import { useVoice } from '@/lib/audio/useVoice';
 import { childSessionToken, clearChildMode, storedChild } from '@/lib/childSession';
 import { LocaleProvider, translate, type Locale } from '@/lib/i18n';
 import { useLockedScreen } from '@/lib/useLockedScreen';
@@ -82,7 +84,9 @@ export default function ToyScreen(): ReactNode {
   const router = useRouter();
   const { refresh } = useSession();
   const [child, setChild] = useState<ChildToy | null>(null);
-  const [state, setState] = useState<CharacterState>('sleeping');
+  const [token, setToken] = useState<string | null>(null);
+  /** Set only by a tapped activity card; the voice loop owns every other state. */
+  const [celebrating, setCelebrating] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
   const [pinError, setPinError] = useState<string | undefined>();
   const [pinBusy, setPinBusy] = useState(false);
@@ -92,6 +96,8 @@ export default function ToyScreen(): ReactNode {
   useLockedScreen();
 
   const locale: Locale = child?.language ?? 'sr';
+  const voice = useVoice(token, locale);
+  const state: CharacterState = celebrating ? 'happy' : voice.state;
   const t = useCallback(
     (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars),
     [locale],
@@ -107,29 +113,32 @@ export default function ToyScreen(): ReactNode {
       window.clearTimeout(celebrationTimer.current);
       celebrationTimer.current = null;
     }
+    setCelebrating(false);
   }, []);
 
-  /** Tapping an activity card is acknowledged, then Bruno settles back down. */
+  /**
+   * Tapping an activity card is acknowledged, then Bruno settles back down. The activity
+   * engine itself is M4, so for now the card only says "I saw that".
+   */
   const celebrate = useCallback(() => {
-    stopCelebrating();
-    setState('happy');
+    if (celebrationTimer.current !== null) window.clearTimeout(celebrationTimer.current);
+    setCelebrating(true);
     celebrationTimer.current = window.setTimeout(() => {
       celebrationTimer.current = null;
-      setState('idle');
+      setCelebrating(false);
     }, 1200);
-  }, [stopCelebrating]);
+  }, []);
 
   useEffect(() => {
     const stored = storedChild();
-    if (!stored || !childSessionToken()) {
+    const session = childSessionToken();
+    if (!stored || !session) {
       leave();
       return;
     }
     setChild(stored);
-    // Bruno wakes up when the child arrives (UC-05 step 4)
-    const wake = window.setTimeout(() => setState('idle'), 400);
+    setToken(session);
     return () => {
-      window.clearTimeout(wake);
       stopCelebrating();
     };
   }, [leave, stopCelebrating]);
@@ -201,7 +210,12 @@ export default function ToyScreen(): ReactNode {
         {/* min-h-0 lets this shrink; without it the character keeps its height and the
             paw is pushed outside the fixed, non-scrolling screen in landscape */}
         <div className="flex w-full min-h-0 flex-1 items-center justify-center px-4">
-          <Character characterId={child.character_id} state={state} label={child.nickname} />
+          <Character
+            characterId={child.character_id}
+            state={state}
+            label={child.nickname}
+            mouth={voice.mouth}
+          />
         </div>
 
         <div className="flex items-center justify-center gap-3" role="group">
@@ -223,12 +237,16 @@ export default function ToyScreen(): ReactNode {
         <div className="pt-4 pb-4">
           <PawButton
             label={t('child.pawLabel')}
+            level={voice.inputLevel}
+            // the microphone needs a secure context, so a device on plain http can see
+            // the paw but cannot record with it (make https)
+            disabled={!voice.possible || !voice.connected}
             // the paw wins over a celebration still in progress
             onPressStart={() => {
               stopCelebrating();
-              setState('listening');
+              voice.pressDown();
             }}
-            onPressEnd={() => setState('idle')}
+            onPressEnd={voice.pressUp}
           />
         </div>
 

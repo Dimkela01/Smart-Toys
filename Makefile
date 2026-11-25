@@ -11,7 +11,7 @@ API := $(COMPOSE) exec -T api
 CADDY_ROOT := /data/caddy/pki/authorities/local/root.crt
 API_RUN := $(COMPOSE) run --rm -T api
 
-.PHONY: help install dev dev-lite up down logs ps migrate revision seed test test-api test-e2e lint fmt models clean phone https https-stop
+.PHONY: help install dev dev-lite up down logs ps migrate revision seed test test-api test-e2e lint fmt models audio bench clean phone https https-stop
 
 help: ## show this help
 	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -146,6 +146,16 @@ fmt: ## format backend and frontend
 	cd services/api && uv run ruff format ../inference && uv run ruff check --fix ../inference
 	@if [ -f apps/web/package.json ]; then cd apps/web && pnpm exec prettier --write .; else echo "skip: apps/web not set up yet"; fi
 
+audio: .env ## synthesize the child screen's offline fallback lines (needs make dev)
+	cd services/api && uv run python ../../scripts/make_fallback_audio.py \
+		--dest ../../apps/web/public/audio
+
 models: .env ## download model weights listed in models/registry.yaml (not needed for M1)
 	cd services/api && uv run python ../../scripts/download_models.py \
 		--registry ../../models/registry.yaml --dest ../../models/weights
+
+# L, not LANG: LANG is already in the environment on most machines, and make would
+# pass "C.UTF-8" straight through as the language to benchmark
+bench: .env ## first-audio latency over the real stack (M2); make bench N=5 L=sr
+	cd services/api && uv run python ../../scripts/bench_turns.py \
+		--turns $(or $(N),20) $(if $(L),--language $(L),)

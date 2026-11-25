@@ -4,8 +4,10 @@
  * Placeholder character with the seven states from UI.md §3.3.
  *
  * The state names are the contract: M7 swaps this SVG for a Rive file driven by the same
- * state machine, and M2 drives `speaking` from the audio RMS. Nothing here shows text,
- * because the child screen is voice only (docs/CLAUDE.md §2).
+ * state machine. While Bruno speaks, `mouth` is the RMS of the audio actually playing,
+ * so the mouth follows the waveform rather than a timer - a child notices the difference
+ * immediately. Nothing here shows text, because the child screen is voice only
+ * (docs/CLAUDE.md §2).
  */
 
 import type { ReactNode } from 'react';
@@ -32,17 +34,22 @@ export function Character({
   characterId,
   state,
   label,
+  mouth = 0,
 }: {
   characterId: string;
   state: CharacterState;
   /** For screen readers only; the child never reads it. */
   label: string;
+  /** Output RMS, 0 to about 0.3. Only used while speaking. */
+  mouth?: number;
 }): ReactNode {
   const colors = palette[characterId] ?? palette.bear!;
   const eyesClosed = state === 'sleeping' || state === 'goodbye';
-  const mouth =
+  // the curve's depth, in SVG units: a closed mouth at silence, wide open at a shout
+  const open = state === 'speaking' ? 6 + Math.min(1, mouth * 7) * 30 : 0;
+  const mouthPath =
     state === 'speaking'
-      ? 'M100 156 q20 22 40 0'
+      ? `M100 ${(156 - open / 4).toFixed(1)} q20 ${open.toFixed(1)} 40 0`
       : state === 'happy'
         ? 'M98 152 q22 26 44 0'
         : 'M104 158 q16 14 32 0';
@@ -71,7 +78,7 @@ export function Character({
         </g>
         <path
           className="character__mouth"
-          d={mouth}
+          d={mouthPath}
           fill="none"
           stroke="#2b2b2b"
           strokeWidth="6"

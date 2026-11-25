@@ -71,11 +71,24 @@ class Engine(Protocol):
 
 
 class KokoroEngine:
-    """Kokoro-82M through its own package; English only (§6.4)."""
+    """Kokoro-82M through its own package; English only (§6.4).
+
+    Thread count matters more than it looks. torch defaults to one thread per core, and
+    this service synthesizes sentence N while llama.cpp is still generating sentence
+    N+1, so an unbounded torch starves the model. Measured over 20 English turns with
+    torch taking every core: 1829 ms to the first audio chunk and 13 tokens/s decode,
+    against 86 ms and 39 tokens/s for the Serbian voice, which is a tenth of the work.
+    TTS_THREADS leaves the cores llama.cpp was given (see .env.example).
+    """
 
     def __init__(self, entry: dict[str, Any]) -> None:
         import torch
         from kokoro import KModel, KPipeline
+
+        threads = int(os.environ.get("TTS_THREADS") or 0)
+        if threads > 0:
+            torch.set_num_threads(threads)
+            LOG.info("torch limited to %d threads", threads)
 
         self.voice_id = str(entry["id"])
         directory = registry.weights_dir("tts", self.voice_id)
